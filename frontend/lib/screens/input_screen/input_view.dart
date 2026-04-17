@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants.dart';
+import '../output_screen/output_view.dart';
 import 'widgets/glass_container.dart';
 
 class InputView extends StatelessWidget {
@@ -165,7 +166,14 @@ class InputView extends StatelessWidget {
                                 side: BorderSide(color: Colors.white.withOpacity(0.2)),
                               ),
                             ),
-                            onPressed: () {},
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const OutputView(),
+                                ),
+                              );
+                            },
                             child: const Text(
                               "View Available Items",
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),

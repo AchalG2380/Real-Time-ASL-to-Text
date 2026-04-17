@@ -190,7 +190,7 @@ class OutputView extends StatelessWidget {
                             }),
                             const VerticalDivider(color: Colors.white24, indent: 15, endIndent: 15),
                             _buildControlButton(Icons.swap_horiz, "Switch", () {
-                               // TODO: Swap to Input Screen logic
+                              Navigator.pop(context);
                             }),
                           ],
                         ),
