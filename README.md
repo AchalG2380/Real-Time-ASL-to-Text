@@ -24,7 +24,7 @@
 
 ## Overview
 
-SignBridge is a hackathon project built for the **36-hour accessibility hackathon**. It is a counter-mounted tablet application that uses on-device hand gesture recognition to translate American Sign Language (ASL) into readable text in real time — enabling deaf customers to communicate with retail staff, and deaf retail employees to communicate with customers.
+CosmicSigns is a hackathon project built for the **36-hour Kriyeta 5.0 hackathon**. It is a counter-mounted tablet application that uses on-device hand gesture recognition to translate American Sign Language (ASL) into readable text in real time — enabling deaf customers to communicate with retail staff, and deaf retail employees to communicate with customers.
 
 ---
 
