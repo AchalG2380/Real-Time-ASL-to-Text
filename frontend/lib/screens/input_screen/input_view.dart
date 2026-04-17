@@ -15,8 +15,8 @@ class InputView extends StatelessWidget {
           // 1. THE ATMOSPHERE (Background Colors & Glows)
           // ---------------------------------------------------------
           // Deepest background color
-          Container(color: const Color(0xFF16181A)), 
-          
+          Container(color: const Color(0xFF16181A)),
+
           // Top Left Subtle Silver Glow
           Positioned(
             top: -150,
@@ -26,14 +26,18 @@ class InputView extends StatelessWidget {
               height: 600,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.03), 
+                color: Colors.white.withOpacity(0.03),
                 boxShadow: [
-                  BoxShadow(color: Colors.white.withOpacity(0.04), blurRadius: 150, spreadRadius: 50),
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.04),
+                    blurRadius: 150,
+                    spreadRadius: 50,
+                  ),
                 ],
               ),
             ),
           ),
-          
+
           // Bottom Right Metallic Slate Glow
           Positioned(
             bottom: -200,
@@ -43,9 +47,13 @@ class InputView extends StatelessWidget {
               height: 700,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF5A6B7C).withOpacity(0.15), 
+                color: const Color(0xFF5A6B7C).withOpacity(0.15),
                 boxShadow: [
-                  BoxShadow(color: const Color(0xFF5A6B7C).withOpacity(0.15), blurRadius: 200, spreadRadius: 100),
+                  BoxShadow(
+                    color: const Color(0xFF5A6B7C).withOpacity(0.15),
+                    blurRadius: 200,
+                    spreadRadius: 100,
+                  ),
                 ],
               ),
             ),
@@ -72,7 +80,10 @@ class InputView extends StatelessWidget {
                               child: Text(
                                 AppConstants.cameraPlaceholder,
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white.withOpacity(0.7), letterSpacing: 0.5),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),
@@ -85,7 +96,9 @@ class InputView extends StatelessWidget {
                             child: ListView(
                               scrollDirection: Axis.horizontal,
                               padding: const EdgeInsets.all(16),
-                              children: AppConstants.inputSuggestions.map((suggestion) {
+                              children: AppConstants.inputSuggestions.map((
+                                suggestion,
+                              ) {
                                 return _buildSuggestionChip(suggestion);
                               }).toList(),
                             ),
@@ -94,9 +107,8 @@ class InputView extends StatelessWidget {
                       ],
                     ),
                   ),
-                  
-                  const SizedBox(width: 24), // Spacer
 
+                  const SizedBox(width: 24), // Spacer
                   // RIGHT SIDE: Chatbox + Button
                   Expanded(
                     flex: 3,
@@ -120,8 +132,11 @@ class InputView extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                Divider(color: Colors.white.withOpacity(0.1), height: 1),
-                                Expanded(child: Container()), 
+                                Divider(
+                                  color: Colors.white.withOpacity(0.1),
+                                  height: 1,
+                                ),
+                                Expanded(child: Container()),
                                 // Input field
                                 Padding(
                                   padding: const EdgeInsets.all(16.0),
@@ -129,7 +144,9 @@ class InputView extends StatelessWidget {
                                     style: const TextStyle(color: Colors.white),
                                     decoration: InputDecoration(
                                       hintText: "Type a reply...",
-                                      hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                                      hintStyle: TextStyle(
+                                        color: Colors.white.withOpacity(0.4),
+                                      ),
                                       filled: true,
                                       fillColor: Colors.white.withOpacity(0.05),
                                       border: OutlineInputBorder(
@@ -140,9 +157,15 @@ class InputView extends StatelessWidget {
                                         margin: const EdgeInsets.all(6),
                                         decoration: BoxDecoration(
                                           color: Colors.white.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                         ),
-                                        child: const Icon(Icons.send, color: Colors.white, size: 18),
+                                        child: const Icon(
+                                          Icons.send,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -163,7 +186,9 @@ class InputView extends StatelessWidget {
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                                side: BorderSide(
+                                  color: Colors.white.withOpacity(0.2),
+                                ),
                               ),
                             ),
                             onPressed: () {
@@ -176,7 +201,11 @@ class InputView extends StatelessWidget {
                             },
                             child: const Text(
                               "View Available Items",
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
                         ),
@@ -203,8 +232,11 @@ class InputView extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          text, 
-          style: TextStyle(color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.w500),
+          text,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.9),
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
