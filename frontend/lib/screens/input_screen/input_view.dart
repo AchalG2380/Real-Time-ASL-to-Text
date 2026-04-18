@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants.dart';
 import 'widgets/glass_container.dart';
 import '../output_screen/output_view.dart';
-import '../../widgets/inventory_panel.dart';
+import 'widgets/inventory_panel.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class InputView extends StatefulWidget {
