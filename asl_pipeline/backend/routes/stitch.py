@@ -1,24 +1,29 @@
+from fastapi import APIRouter
+from pydantic import BaseModel
+from routes.suggestions import paraphrase_sign, ParaphraseRequest
+
+router = APIRouter()
+
+
 class StitchRequest(BaseModel):
-    tokens: list         # e.g. ["H","E","L","P"] or ["HELP"] or ["H","I"]
+    tokens: list
     store_type: str = "default"
     screen: str = "A"
     conversation_history: list = []
 
-@router.post("/stitch")
+
+@router.post("/")
 async def stitch_signs(req: StitchRequest):
     """
-    Receives a list of detected tokens (words or letters).
-    Figures out if it's a fingerspelled word or a sign word.
+    Receives detected tokens (words or letters).
+    Figures out if it's fingerspelled or a word sign.
     Returns a paraphrased sentence ready for chat.
     """
-    # If single token and it's a full word (not a single letter) → treat as word sign
     if len(req.tokens) == 1 and len(req.tokens[0]) > 1:
-        raw = req.tokens[0]  # e.g. "HELP"
+        raw = req.tokens[0]       # single word token e.g. "HELP"
     else:
-        # Multiple single letters → join into word
-        raw = "".join(req.tokens)  # ["H","E","L","P"] → "HELP"
-    
-    # Now paraphrase it
+        raw = "".join(req.tokens) # letters joined e.g. ["H","E","L","P"] → "HELP"
+
     paraphrase_req = ParaphraseRequest(
         raw_sign=raw,
         conversation_history=req.conversation_history,

@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-from fastapi import APIRouter
 from pydantic import BaseModel
 from services.translate_service import translate_text
 import uuid
