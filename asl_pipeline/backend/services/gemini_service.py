@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = "llama3-8b-8192"           # fast, free, good quality
-FALLBACK_MODEL = "gemma2-9b-it"    # Groq's second free model as fallback
+MODEL = "llama-3.3-70b-versatile"      # Groq's current fast model
+FALLBACK_MODEL = "llama-3.1-8b-instant" # Groq's current lightweight fallback
 
 RULE_BASED_FALLBACK = {
     "HELP": ["I need help, please", "Can someone assist me?", "Could you help me?"],
