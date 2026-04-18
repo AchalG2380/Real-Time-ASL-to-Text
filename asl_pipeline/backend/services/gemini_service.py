@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-MODEL = "llama-3.3-70b-versatile"      # Groq's current fast model
-FALLBACK_MODEL = "llama-3.1-8b-instant" # Groq's current lightweight fallback
+MODEL = "llama-3.3-70b-versatile"
+FALLBACK_MODEL = "llama-3.1-8b-instant"
 
 RULE_BASED_FALLBACK = {
     "HELP": ["I need help, please", "Can someone assist me?", "Could you help me?"],
@@ -19,6 +19,17 @@ RULE_BASED_FALLBACK = {
     "REPEAT": ["Could you please repeat that?", "Sorry, could you say that again?"],
     "DEFAULT": ["Could you help me?", "I have a question", "Excuse me"]
 }
+
+
+def _format_history(history: list) -> str:
+    """Safely formats history regardless of whether items are dicts or strings."""
+    lines = []
+    for m in history[-4:]:
+        if isinstance(m, dict):
+            lines.append(f"{m.get('sender', '?')}: {m.get('text', '')}")
+        else:
+            lines.append(str(m))
+    return "\n".join(lines)
 
 
 async def get_smart_suggestion(detected_sign: str, history: list, screen: str, store_type: str):
@@ -41,14 +52,7 @@ async def get_smart_suggestion(detected_sign: str, history: list, screen: str, s
 
 
 async def get_followup_suggestions(chosen: str, history: list, store_type: str):
-    # Handle both formats — list of dicts OR list of strings
-    context_lines = []
-    for m in history[-4:]:
-        if isinstance(m, dict):
-            context_lines.append(f"{m.get('sender', '?')}: {m.get('text', '')}")
-        else:
-            context_lines.append(str(m))
-    context = "\n".join(context_lines)
+    context = _format_history(history)
 
     prompt = f"""You are a suggestion engine for a retail store ASL tablet.
 The user just said: "{chosen}"
@@ -75,13 +79,7 @@ Example: ["I need help with billing", "I need help finding a product", "I need h
 
 
 async def get_paraphrase(raw_sign: str, history: list, screen: str, store_type: str):
-    context_lines = []
-    for m in history[-4:]:
-        if isinstance(m, dict):
-            context_lines.append(f"{m.get('sender', '?')}: {m.get('text', '')}")
-        else:
-            context_lines.append(str(m))
-    context = "\n".join(context_lines)
+    context = _format_history(history)
     who = "deaf customer" if screen == "A" else "deaf store employee"
 
     prompt = f"""You are a translator for a retail store ASL tablet.
@@ -106,13 +104,7 @@ Return ONLY the sentence. No explanation. No quotes."""
 
 
 async def _call_groq(detected_sign, history, screen, store_type, model_name):
-    context_lines = []
-    for m in history[-4:]:
-        if isinstance(m, dict):
-             context_lines.append(f"{m.get('sender', '?')}: {m.get('text', '')}")
-        else:
-            context_lines.append(str(m))
-    context = "\n".join(context_lines)
+    context = _format_history(history)
     who = "deaf customer" if screen == "A" else "deaf store employee"
 
     prompt = f"""You are a smart suggestion engine for a retail store ASL tablet.
