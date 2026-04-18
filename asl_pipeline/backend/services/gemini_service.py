@@ -3,73 +3,134 @@ import json
 import httpx
 from dotenv import load_dotenv
 
-# Load your OpenRouter API key from the .env file
 load_dotenv()
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-async def get_smart_suggestion(payload: dict) -> list:
-    """Calls OpenRouter to predict what the user is trying to sign."""
-    
-    # 1. Pull the specific details out of the data sent by Flutter
-    sign = payload.get("detected_sign", "")
-    history = payload.get("conversation_history", [])
-    screen = payload.get("screen", "general")
-    store_type = payload.get("store_type", "default")
-    
-    # 2. Create the instructions for the AI
-    system_prompt = (
-        "You are a predictive text engine for an ASL translation app. "
-        "Based on the user's current sign, previous conversation history, and app screen context, "
-        "predict the 3 most likely complete sentences or phrases they want to say. "
-        "Return ONLY a valid JSON list of 3 strings. Do not add markdown formatting. "
-        "Example: [\"Where is the restroom?\", \"How much does this cost?\", \"I need help.\"]"
-    )
-    
-    user_prompt = f"Current Sign: {sign}\nHistory: {history}\nScreen Context: {screen}\nStore Type: {store_type}"
+# These were missing — add them
+MODEL = "google/gemini-2.0-flash-001"
+FALLBACK_MODEL = "mistralai/mistral-7b-instruct"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+HEADERS = {
+    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+    "Content-Type": "application/json",
+    "HTTP-Referer": "https://asl-retail-translator.com",
+    "X-Title": "ASL Retail Translator"
+}
 
-    # 3. Set up the web request to OpenRouter
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "http://localhost:8000", # OpenRouter requires a referer URL
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": "google/gemini-2.5-flash-lite", # A highly capable, free model on OpenRouter
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        "temperature": 0.5 # Keeps the predictions logical and grounded
-    }
-    
+RULE_BASED_FALLBACK = {
+    "HELP": ["I need help, please", "Can someone assist me?", "Could you help me?"],
+    "PRICE": ["How much does this cost?", "What is the price?", "Can you tell me the price?"],
+    "THANK": ["Thank you!", "Thanks very much!", "I really appreciate it"],
+    "BATHROOM": ["Where is the bathroom?", "Could you direct me to the restroom?"],
+    "BAG": ["Can I get a bag please?", "I need a carry bag"],
+    "HELLO": ["Hello!", "Hi there!", "Good day!"],
+    "REPEAT": ["Could you please repeat that?", "Sorry, could you say that again?"],
+    "DEFAULT": ["Could you help me?", "I have a question", "Excuse me"]
+}
+
+
+async def get_smart_suggestion(detected_sign: str, history: list, screen: str, store_type: str):
     try:
-        # 4. Send the request asynchronously so the server doesn't freeze up
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=10.0
-            )
-            response.raise_for_status() # Check for errors like a bad API key
-            
-            # 5. Extract the AI's text response
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
-            
-            # 6. Clean up the response and convert it from a string back into a Python list
-            cleaned_content = content.replace("```json", "").replace("```", "").strip()
-            suggestions_list = json.loads(cleaned_content)
-            
-            return suggestions_list
-            
+        result = await _call_openrouter(detected_sign, history, screen, store_type, MODEL)
+        if result:
+            return result
     except Exception as e:
-        print(f"OpenRouter API Error: {e}")
-        # If the internet drops or the API fails, return safe fallback options so the app doesn't crash
-        return ["Can you repeat that?", "I need help.", "Thank you."]
+        print(f"Primary model failed: {e}")
+
+    try:
+        result = await _call_openrouter(detected_sign, history, screen, store_type, FALLBACK_MODEL)
+        if result:
+            return result
+    except Exception as e:
+        print(f"Fallback model failed: {e}")
+
+    print("Using rule-based fallback")
+    return RULE_BASED_FALLBACK.get(detected_sign.upper(), RULE_BASED_FALLBACK["DEFAULT"])
 
 
-async def get_followup_suggestions(text: str) -> list:
-    """Placeholder for the other route so your app doesn't throw import errors."""
-    return ["Follow-up 1", "Follow-up 2"]
+# This was completely missing — add it
+async def get_followup_suggestions(chosen: str, history: list, store_type: str):
+    context = "\n".join([f"{m['sender']}: {m['text']}" for m in history[-4:]])
+
+    prompt = f"""You are a suggestion engine for a retail store ASL tablet.
+The user just said: "{chosen}"
+Store type: {store_type}
+Recent conversation:
+{context}
+
+Give exactly 2-3 short follow-up sentences the user might say next, like autocomplete.
+Return ONLY a JSON array. No explanation. No markdown."""
+
+    payload = {
+        "model": MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 120,
+        "temperature": 0.5
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(OPENROUTER_URL, json=payload, headers=HEADERS)
+            data = response.json()
+            text = data["choices"][0]["message"]["content"].strip()
+            text = text.replace("```json", "").replace("```", "").strip()
+            return json.loads(text)[:3]
+    except Exception as e:
+        print(f"Followup error: {e}")
+        return []
+
+
+async def get_paraphrase(raw_sign: str, history: list, screen: str, store_type: str):
+    context = "\n".join([f"{m['sender']}: {m['text']}" for m in history[-4:]])
+    who = "deaf customer" if screen == "A" else "deaf store employee"
+
+    prompt = f"""You are a translator for a retail store ASL tablet.
+A {who} just signed the word: "{raw_sign}"
+Store context: {store_type}
+Recent conversation:
+{context}
+
+Convert this single signed word into ONE natural, complete, polite sentence.
+Return ONLY the sentence. No explanation. No quotes."""
+
+    payload = {
+        "model": MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 60,
+        "temperature": 0.3
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(OPENROUTER_URL, json=payload, headers=HEADERS)
+            data = response.json()
+            sentence = data["choices"][0]["message"]["content"].strip()
+            return sentence
+    except Exception as e:
+        print(f"Paraphrase error: {e}")
+        return f"I need {raw_sign.lower()}"
+
+
+async def _call_openrouter(detected_sign, history, screen, store_type, model_name):
+    context = "\n".join([f"{m['sender']}: {m['text']}" for m in history[-4:]])
+    who = "deaf customer" if screen == "A" else "deaf store employee"
+
+    prompt = f"""You are a smart suggestion engine for a retail store ASL tablet.
+Person signing is a {who} in a {store_type}.
+Sign detected: "{detected_sign}"
+Recent conversation: {context}
+Give exactly 3 short natural sentences. Return ONLY a JSON array of 3 strings."""
+
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 150,
+        "temperature": 0.4
+    }
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.post(OPENROUTER_URL, json=payload, headers=HEADERS)
+        data = response.json()
+        text = data["choices"][0]["message"]["content"].strip()
+        text = text.replace("```json", "").replace("```", "").strip()
+        return json.loads(text)[:3]
