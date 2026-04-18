@@ -4,5 +4,5 @@ python-dotenv
 httpx
 deep-translator
 python-multipart
-openai-whisper
+groq
 gtts
