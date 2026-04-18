@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import suggestions, chat, speech, admin, stitch
+from routes import suggestions, chat, speech, admin
+from routes import stitch                          # separate import because it's in routes/
 
 app = FastAPI()
 
