@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/input_screen/input_view.dart';
+import 'screens/login_screen.dart'; // This brings in your new start screen!
 
 void main() {
   runApp(const AslRetailApp());
@@ -15,9 +15,10 @@ class AslRetailApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        fontFamily: 'Helvetica', // Clean, premium font
+        fontFamily: 'Helvetica', 
       ),
-      home: const InputView(),
+      // This is the magic line. It tells the app to boot into the Login Screen!
+      home: const LoginScreen(), 
     );
   }
 }
