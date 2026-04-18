@@ -1,51 +1,39 @@
 import cv2
 import numpy as np
 import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-import urllib.request
-import os
-
-# ── Download hand landmarker model if not present ──────────────────────────
-_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hand_landmarker.task')
-
-if not os.path.exists(_MODEL_PATH):
-    print("Downloading hand landmarker model...")
-    urllib.request.urlretrieve(
-        'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-        _MODEL_PATH
-    )
-    print("✓ Downloaded")
 
 
 class KeypointExtractor:
-    def __init__(self, max_num_hands=2, min_detection_confidence=0.7):
-        options = vision.HandLandmarkerOptions(
-            base_options=python.BaseOptions(model_asset_path=_MODEL_PATH),
-            running_mode=vision.RunningMode.IMAGE,
-            num_hands=max_num_hands,
-            min_hand_detection_confidence=min_detection_confidence
+    def __init__(self, max_num_hands=2, min_detection_confidence=0.7, min_tracking_confidence=0.5):
+        self.mp_hands = mp.solutions.hands
+        self.mp_drawing = mp.solutions.drawing_utils
+        self.mp_drawing_styles = mp.solutions.drawing_styles
+
+        self.hands = self.mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=max_num_hands,
+            min_detection_confidence=min_detection_confidence,
+            min_tracking_confidence=min_tracking_confidence
         )
-        self._detector = vision.HandLandmarker.create_from_options(options)
 
     def extract(self, frame_bgr):
-        """
-        Extract normalized keypoints from a BGR frame.
-        Returns np.array of shape (126,) or None if no hands detected.
-        """
-        img_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
-        results = self._detector.detect(mp_image)
+        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        frame_rgb.flags.writeable = False
+        results = self.hands.process(frame_rgb)
+        frame_rgb.flags.writeable = True
 
-        if not results.hand_landmarks:
+        if not results.multi_hand_landmarks:
             return None
 
         keypoints = np.zeros((2, 21, 3), dtype=np.float32)
 
-        for hand_idx, hand in enumerate(results.hand_landmarks):
+        for hand_idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
             if hand_idx >= 2:
                 break
-            landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand], dtype=np.float32)
+            landmarks = np.array(
+                [[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark],
+                dtype=np.float32
+            )
             wrist = landmarks[0].copy()
             landmarks -= wrist
             max_val = np.max(np.abs(landmarks)) + 1e-6
@@ -55,27 +43,28 @@ class KeypointExtractor:
         return keypoints.flatten()
 
     def extract_with_handedness(self, frame_bgr):
-        """
-        Returns (keypoints np.array (126,), handedness_labels list of 'Left'/'Right')
-        """
-        img_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
-        results = self._detector.detect(mp_image)
+        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        frame_rgb.flags.writeable = False
+        results = self.hands.process(frame_rgb)
+        frame_rgb.flags.writeable = True
 
-        if not results.hand_landmarks:
+        if not results.multi_hand_landmarks:
             return None, []
 
         keypoints = np.zeros((2, 21, 3), dtype=np.float32)
         handedness_labels = []
 
-        for hand_idx, (hand, handedness) in enumerate(
-            zip(results.hand_landmarks, results.handedness)
+        for hand_idx, (hand_landmarks, handedness) in enumerate(
+            zip(results.multi_hand_landmarks, results.multi_handedness)
         ):
             if hand_idx >= 2:
                 break
-            label = handedness[0].category_name  # 'Left' or 'Right'
+            label = handedness.classification[0].label
             handedness_labels.append(label)
-            landmarks = np.array([[lm.x, lm.y, lm.z] for lm in hand], dtype=np.float32)
+            landmarks = np.array(
+                [[lm.x, lm.y, lm.z] for lm in hand_landmarks.landmark],
+                dtype=np.float32
+            )
             wrist = landmarks[0].copy()
             landmarks -= wrist
             max_val = np.max(np.abs(landmarks)) + 1e-6
@@ -85,35 +74,18 @@ class KeypointExtractor:
         return keypoints.flatten(), handedness_labels
 
     def draw_landmarks(self, frame_bgr):
-        """Draw hand skeleton on frame. Returns annotated frame."""
-        img_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
-        results = self._detector.detect(mp_image)
+        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(frame_rgb)
 
-        if not results.hand_landmarks:
-            return frame_bgr
-
-        # Manual drawing since mp.solutions.drawing_utils is unavailable
-        h, w = frame_bgr.shape[:2]
-        for hand in results.hand_landmarks:
-            # Draw points
-            for lm in hand:
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                cv2.circle(frame_bgr, (cx, cy), 4, (0, 255, 0), -1)
-            # Draw connections
-            connections = [
-                (0,1),(1,2),(2,3),(3,4),
-                (0,5),(5,6),(6,7),(7,8),
-                (0,9),(9,10),(10,11),(11,12),
-                (0,13),(13,14),(14,15),(15,16),
-                (0,17),(17,18),(18,19),(19,20),
-                (5,9),(9,13),(13,17)
-            ]
-            for a, b in connections:
-                ax, ay = int(hand[a].x * w), int(hand[a].y * h)
-                bx, by = int(hand[b].x * w), int(hand[b].y * h)
-                cv2.line(frame_bgr, (ax, ay), (bx, by), (0, 200, 255), 2)
-
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                self.mp_drawing.draw_landmarks(
+                    frame_bgr,
+                    hand_landmarks,
+                    self.mp_hands.HAND_CONNECTIONS,
+                    self.mp_drawing_styles.get_default_hand_landmarks_style(),
+                    self.mp_drawing_styles.get_default_hand_connections_style()
+                )
         return frame_bgr
 
     def get_wrist_velocity(self, prev_keypoints, curr_keypoints):
@@ -122,10 +94,9 @@ class KeypointExtractor:
         return float(np.linalg.norm(curr_keypoints[:3] - prev_keypoints[:3]))
 
     def close(self):
-        self._detector.close()
+        self.hands.close()
 
 
-# ── Quick Test ────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     extractor = KeypointExtractor()
     cap = cv2.VideoCapture(0)
@@ -148,6 +119,7 @@ if __name__ == "__main__":
 
         frame = extractor.draw_landmarks(frame)
         cv2.imshow("Keypoint Extractor Test", frame)
+        cv2.setWindowProperty("Keypoint Extractor Test", cv2.WND_PROP_TOPMOST, 1)
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
 

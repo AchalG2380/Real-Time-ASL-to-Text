@@ -1,22 +1,13 @@
 import cv2
 import numpy as np
 import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-import os
 
-_MODEL_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    '..', 'asl_ml', 'hand_landmarker.task'
+_mp_hands = mp.solutions.hands
+_detector = _mp_hands.Hands(
+    static_image_mode=True,
+    max_num_hands=1,
+    min_detection_confidence=0.3
 )
-
-_options = vision.HandLandmarkerOptions(
-    base_options=python.BaseOptions(model_asset_path=str(_MODEL_PATH)),
-    running_mode=vision.RunningMode.IMAGE,
-    num_hands=1,
-    min_hand_detection_confidence=0.5
-)
-_detector = vision.HandLandmarker.create_from_options(_options)
 
 def extract_keypoints_from_bytes(image_bytes: bytes):
     arr = np.frombuffer(image_bytes, np.uint8)
@@ -24,15 +15,15 @@ def extract_keypoints_from_bytes(image_bytes: bytes):
     if frame is None:
         return None
 
+    frame = cv2.resize(frame, (960, 720))
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
-    results = _detector.detect(mp_image)
+    results = _detector.process(img_rgb)
 
-    if not results.hand_landmarks:
+    if not results.multi_hand_landmarks:
         return None
 
     landmarks = np.array(
-        [[lm.x, lm.y, lm.z] for lm in results.hand_landmarks[0]],
+        [[lm.x, lm.y, lm.z] for lm in results.multi_hand_landmarks[0].landmark],
         dtype=np.float32
     )
     wrist = landmarks[0].copy()
