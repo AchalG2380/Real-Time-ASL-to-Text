@@ -1,51 +1,52 @@
 import cv2
-import requests
+import numpy as np
+import tensorflow as tf
+import json
+import os
+import sys
 import threading
 import time
+from collections import Counter
 
-API_URL = "http://localhost:8000/predict"
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'asl_ml'))
+from keypoint_extractor import KeypointExtractor
 
-# Shared state between threads
-latest_result = {"letter": "", "confidence": 0.0, "detected": False}
-result_lock = threading.Lock()
-latest_frame = None
-frame_lock = threading.Lock()
-running = True
+# ── Load model directly ────────────────────────────────────────────────────
+MODEL_PATH  = os.path.join('..', 'asl_ml', 'models', 'asl_letter_model.tflite')
+LABELS_PATH = os.path.join('..', 'asl_ml', 'models', 'letter_labels.json')
 
-def api_worker():
-    """Runs in background — sends frames to API every 500ms"""
-    time.sleep(2)  # wait for webcam to open first
-    while running:
-        frame_copy = None
-        with frame_lock:
-            if latest_frame is not None:
-                frame_copy = latest_frame.copy()
+interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
+interpreter.allocate_tensors()
+inp_details = interpreter.get_input_details()
+out_details = interpreter.get_output_details()
 
-        if frame_copy is None:
-            time.sleep(0.05)
-            continue
+with open(LABELS_PATH) as f:
+    LETTERS = json.load(f)
 
-        _, jpeg = cv2.imencode('.jpg', frame_copy, [cv2.IMWRITE_JPEG_QUALITY, 70])
-        jpeg_bytes = jpeg.tobytes()
+def predict(keypoints):
+    x = keypoints.reshape(1, 126).astype(np.float32)
+    interpreter.set_tensor(inp_details[0]['index'], x)
+    interpreter.invoke()
+    probs = interpreter.get_tensor(out_details[0]['index'])[0]
+    idx = np.argmax(probs)
+    return LETTERS[idx], float(probs[idx])
 
-        try:
-            response = requests.post(
-                API_URL,
-                files={"file": ("frame.jpg", jpeg_bytes, "image/jpeg")},
-                timeout=10
-            )
-            result = response.json()
-            with result_lock:
-                latest_result.update(result)
-        except Exception as e:
-            print(f"API error: {e}")
+# ── Extractor ──────────────────────────────────────────────────────────────
+extractor = KeypointExtractor(max_num_hands=1, min_detection_confidence=0.3)
 
-        time.sleep(0.5)
+# ── Smoothing ──────────────────────────────────────────────────────────────
+prediction_buffer = []
+BUFFER_SIZE = 5
 
-# Start background thread
-api_thread = threading.Thread(target=api_worker, daemon=True)
-api_thread.start()
+def get_smoothed_prediction():
+    if not prediction_buffer:
+        return "", 0.0
+    letters = [p[0] for p in prediction_buffer]
+    most_common = Counter(letters).most_common(1)[0][0]
+    confs = [p[1] for p in prediction_buffer if p[0] == most_common]
+    return most_common, sum(confs) / len(confs)
 
+# ── Webcam loop ────────────────────────────────────────────────────────────
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
@@ -58,32 +59,37 @@ while cap.isOpened():
 
     frame = cv2.flip(frame, 1)
 
-    # Update shared frame for API thread
-    with frame_lock:
-        latest_frame = frame.copy()
+    # Extract keypoints
+    keypoints = extractor.extract(frame)
 
-    # Read latest prediction (non-blocking)
-    with result_lock:
-        detected = latest_result["detected"]
-        letter = latest_result["letter"]
-        conf = latest_result["confidence"]
+    if keypoints is not None:
+        letter, conf = predict(keypoints)
+        prediction_buffer.append((letter, conf))
+        if len(prediction_buffer) > BUFFER_SIZE:
+            prediction_buffer.pop(0)
+    else:
+        prediction_buffer.clear()
+
+    # Draw skeleton
+    frame = extractor.draw_landmarks(frame)
 
     # Display
-    if detected:
-        label = f"{letter}  ({conf:.0%})"
-        color = (0, 255, 0) if conf > 0.7 else (0, 165, 255)
+    smoothed_letter, smoothed_conf = get_smoothed_prediction()
+    if smoothed_letter:
+        label = f"{smoothed_letter}  ({smoothed_conf:.0%})"
+        color = (0, 255, 0) if smoothed_conf > 0.7 else (0, 165, 255)
     else:
         label = "No hand"
         color = (0, 0, 255)
 
     cv2.putText(frame, label, (10, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
-    cv2.imshow("ASL Predictor Test", frame)
-    cv2.setWindowProperty("ASL Predictor Test", cv2.WND_PROP_TOPMOST, 1)
+    cv2.imshow("ASL Predictor", frame)
+    cv2.setWindowProperty("ASL Predictor", cv2.WND_PROP_TOPMOST, 1)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-running = False
 cap.release()
 cv2.destroyAllWindows()
+extractor.close()

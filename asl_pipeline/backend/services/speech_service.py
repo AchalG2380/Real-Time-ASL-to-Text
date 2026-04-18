@@ -1,34 +1,34 @@
 import os
 import io
-import tempfile
-import whisper
+from dotenv import load_dotenv
+from groq import Groq
 from gtts import gTTS
 
-# Load the Whisper model globally so it only loads once when the server starts.
-# "base" is highly optimized for CPUs without a GPU.
-print("Loading local Whisper model...")
-model = whisper.load_model("base")
-print("Model loaded successfully!")
+# Load environment variables
+load_dotenv()
 
+# Initialize the Groq client
+# Make sure GROQ_API_KEY is added to your .env file
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 async def transcribe_audio(audio_bytes: bytes, filename: str) -> str:
-    """Uses local OpenAI Whisper to convert audio to text."""
+    """Uses Groq Cloud Whisper API to convert audio to text instantly."""
     try:
-        # Local Whisper needs a file path, so we create a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_audio:
-            temp_audio.write(audio_bytes)
-            temp_file_path = temp_audio.name
+        # Groq accepts raw bytes directly if formatted as a tuple.
+        # This replaces the old logic of saving a temporary file to disk.
+        file_tuple = (filename or "audio.webm", audio_bytes)
         
-        # Transcribe the temporary file
-        result = model.transcribe(temp_file_path)
+        # Run transcription through Groq's fast API
+        transcription = client.audio.transcriptions.create(
+            file=file_tuple,
+            model="whisper-large-v3-turbo", 
+            response_format="json"
+        )
         
-        # Delete the temporary file to save space
-        os.remove(temp_file_path)
-        
-        return result["text"]
+        return transcription.text
         
     except Exception as e:
-        print(f"Local Whisper STT error: {e}")
+        print(f"Groq Whisper STT error: {e}")
         return ""
 
 
@@ -48,5 +48,4 @@ async def synthesize_speech(text: str) -> bytes:
     except Exception as e:
         print(f"gTTS error: {e}")
         return b""
-    
     #edited by gemini 
