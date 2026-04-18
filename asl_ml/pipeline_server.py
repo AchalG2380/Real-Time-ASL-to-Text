@@ -7,7 +7,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # Use mock if model not trained yet
-USE_MOCK = not os.path.exists('models/asl_dynamic_model.tflite')
+USE_MOCK = not os.path.exists('models/asl_letter_model.tflite')
 
 if USE_MOCK:
     from inference_pipeline import MockASLPipeline
@@ -24,21 +24,33 @@ else:
     print("✓ Running with trained model")
 
 app = Flask(__name__)
-CORS(app)  # Allow Flutter to call from any origin
+CORS(app)
 
 
 @app.route('/health', methods=['GET'])
 def health():
-    return jsonify({"status": "ok", "mock": USE_MOCK})
+    return jsonify({
+        "status": "ok",
+        "mock": USE_MOCK,
+        "model": "alphabet_model"
+    })
 
 
 @app.route('/process_frame', methods=['POST'])
 def process_frame():
     """
-    Accepts a base64 JPEG frame, returns inference result.
-    
+    Accepts a base64 JPEG frame, returns letter detection result.
+
     Flutter sends:
         { "frame_base64": "..." }
+
+    Returns:
+        {
+            "sign": "H",
+            "confidence": 0.91,
+            "source": "alphabet_model",
+            "detected": true
+        }
     """
     try:
         data = request.get_json()
@@ -53,7 +65,35 @@ def process_frame():
             return jsonify({"error": "Invalid frame"}), 400
 
         result = pipeline.process_frame(frame)
-        return jsonify(result)
+
+        # Letter detected
+        if result.get("raw_sign") and result.get("confidence") is not None:
+            confidence = result["confidence"]
+            sign = result["raw_sign"]
+
+            # Ignore anything below confidence threshold
+            if confidence < 0.6:
+                return jsonify({
+                    "sign": None,
+                    "confidence": round(confidence, 3),
+                    "source": "alphabet_model",
+                    "detected": False
+                })
+
+            return jsonify({
+                "sign": sign,
+                "confidence": round(confidence, 3),
+                "source": "alphabet_model",
+                "detected": True
+            })
+
+        # No detection
+        return jsonify({
+            "sign": None,
+            "confidence": 0.0,
+            "source": "alphabet_model",
+            "detected": False
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -108,8 +148,22 @@ def get_offline_suggestions():
     })
 
 
+@app.route('/letters', methods=['GET'])
+def get_supported_letters():
+    """Returns all supported letters the model can detect."""
+    letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    return jsonify({
+        "letters": letters,
+        "count": len(letters),
+        "confidence_threshold": 0.6,
+        "source": "alphabet_model"
+    })
+
+
 if __name__ == '__main__':
-    print("\n=== ASL Pipeline Server ===")
+    print("\n=== ASL Alphabet Pipeline Server ===")
     print("Flutter endpoint: http://localhost:5000")
-    print("Health check: http://localhost:5000/health\n")
+    print("Health check:     http://localhost:5000/health")
+    print("Supported letters: http://localhost:5000/letters")
+    print(f"Mode: {'MOCK' if USE_MOCK else 'LIVE MODEL'}\n")
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
