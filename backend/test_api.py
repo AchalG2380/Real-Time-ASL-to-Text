@@ -13,7 +13,8 @@ frame_lock = threading.Lock()
 running = True
 
 def api_worker():
-    """Runs in background — sends frames to API every 200ms"""
+    """Runs in background — sends frames to API every 500ms"""
+    time.sleep(2)  # wait for webcam to open first
     while running:
         frame_copy = None
         with frame_lock:
@@ -39,7 +40,7 @@ def api_worker():
         except Exception as e:
             print(f"API error: {e}")
 
-        time.sleep(0.5)  # predict 5 times per second max
+        time.sleep(0.5)
 
 # Start background thread
 api_thread = threading.Thread(target=api_worker, daemon=True)
@@ -65,3 +66,24 @@ while cap.isOpened():
     with result_lock:
         detected = latest_result["detected"]
         letter = latest_result["letter"]
+        conf = latest_result["confidence"]
+
+    # Display
+    if detected:
+        label = f"{letter}  ({conf:.0%})"
+        color = (0, 255, 0) if conf > 0.7 else (0, 165, 255)
+    else:
+        label = "No hand"
+        color = (0, 0, 255)
+
+    cv2.putText(frame, label, (10, 50),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3)
+    cv2.imshow("ASL Predictor Test", frame)
+    cv2.setWindowProperty("ASL Predictor Test", cv2.WND_PROP_TOPMOST, 1)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+running = False
+cap.release()
+cv2.destroyAllWindows()
