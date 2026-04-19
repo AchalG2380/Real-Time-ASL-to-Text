@@ -14,20 +14,71 @@ Keys: Q=quit  C=clear  S=toggle status  D=debug velocity
 """
 
 import os, sys, json
+import threading
+import asyncio
+import websockets
+from queue import Queue
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 import cv2
 import numpy as np
 import tensorflow as tf
-import keras
+from tensorflow import keras
 from collections import deque
-from keras.models import Sequential
-from keras.layers import (
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
     LSTM, Dense, Dropout, Conv1D, MaxPooling1D,
     BatchNormalization, GlobalAveragePooling1D, Bidirectional
 )
 import mediapipe as mp
+import mediapipe.python.solutions as mp_solutions
+mp.solutions = mp_solutions
+
+# ─────────────────────────────────────────────────────────────
+# WebSocket Server — broadcasts detections to Flutter
+# ─────────────────────────────────────────────────────────────
+sign_queue       = Queue()
+ws_clients       = set()
+
+async def _ws_handler(websocket):
+    ws_clients.add(websocket)
+    print(f"[WS] Flutter connected  (total={len(ws_clients)})")
+    try:
+        await websocket.wait_closed()
+    finally:
+        ws_clients.discard(websocket)
+        print(f"[WS] Flutter disconnected (total={len(ws_clients)})")
+
+async def _broadcaster():
+    while True:
+        await asyncio.sleep(0.04)   # ~25 times/sec
+        while not sign_queue.empty():
+            msg = sign_queue.get()
+            dead = set()
+            for ws in ws_clients:
+                try:
+                    await ws.send(msg)
+                except Exception:
+                    dead.add(ws)
+            ws_clients -= dead
+
+async def _ws_main():
+    async with websockets.serve(_ws_handler, "localhost", 8765):
+        print("[WS] WebSocket server running on ws://localhost:8765")
+        await _broadcaster()
+
+def _start_ws():
+    asyncio.run(_ws_main())
+
+threading.Thread(target=_start_ws, daemon=True).start()
+
+def emit_sign(sign: str, confidence: float, source: str):
+    """Call this whenever a sign is confirmed. Thread-safe."""
+    msg = json.dumps({"sign": sign, "confidence": round(confidence, 3), "source": source})
+    sign_queue.put(msg)
+    print(f"[WS] Emitting → {msg}")
+
 
 # ─────────────────────────────────────────────────────────────
 # Paths
@@ -385,6 +436,7 @@ while cap.isOpened():
             reset_letter_state()
             add_to_sentence(top_word)
             print(f">>> WORD: {top_word} ({top_conf*100:.0f}%)")
+            emit_sign(top_word, top_conf, "word_model")
     elif not hand_active:
         reset_word_state()
 
@@ -417,6 +469,7 @@ while cap.isOpened():
                 reset_word_state()
                 add_to_sentence(letter)
                 print(f">>> LETTER: {letter} ({l_conf*100:.0f}%)")
+                emit_sign(letter, l_conf, "alphabet_model")
         else:
             reset_letter_state()
     elif not letter_unlocked:
