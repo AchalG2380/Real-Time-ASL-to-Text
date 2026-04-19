@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants.dart';
+import '../../services/app_state.dart';
+import '../../services/api_service.dart';
 import 'widgets/glass_container.dart';
 import '../output_screen/output_view.dart';
 import 'widgets/inventory_panel.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 
 class InputView extends StatefulWidget {
   final bool isAdmin;
@@ -24,6 +28,7 @@ class _InputViewState extends State<InputView> {
   ];
 
   late stt.SpeechToText _speech;
+  final FlutterTts _flutterTts = FlutterTts();
   bool _isListening = false;
   final TextEditingController _chatController = TextEditingController();
 
@@ -34,25 +39,42 @@ class _InputViewState extends State<InputView> {
   final List<String> _customSuggestions = [];
   final TextEditingController _customSuggestionController = TextEditingController();
 
-  @override
+ @override
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
+    // Sync AppState's greeting into messages on first load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final appState = context.read<AppState>();
+      if (appState.messages.isEmpty && appState.greeting.isNotEmpty) {
+        appState.addMessage('system', appState.greeting);
+      }
+    });
   }
 
   @override
   void dispose() {
     _chatController.dispose();
     _customSuggestionController.dispose();
+    _flutterTts.stop();
     super.dispose();
   }
 
   void _sendMessage(String text) {
     if (text.trim().isEmpty) return;
-    setState(() {
-      _messages.add({"text": text.trim(), "isMe": true});
-    });
+    final appState = context.read<AppState>();
+    appState.addMessage(AppConstants.kSenderA, text.trim());
     _chatController.clear();
+  }
+
+  void onSignReceived(String sign) {
+    final appState = context.read<AppState>();
+    appState.handleIncomingSign(sign, AppConstants.kScreenA);
+  }
+
+  Future<void> _speakText(String text) async {
+    await _flutterTts.setLanguage('en-US');
+    await _flutterTts.speak(text);
   }
 
   void _listen() async {
@@ -87,6 +109,7 @@ class _InputViewState extends State<InputView> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
     return Scaffold(
       body: Stack(
         children: [
@@ -120,6 +143,13 @@ class _InputViewState extends State<InputView> {
                             runSpacing: 8,
                             alignment: WrapAlignment.center,
                             children: [
+                              // AI/backend suggestions (shown when available)
+                              ...appState.currentSuggestions.map((text) =>
+                                  _buildSmallChip(text, isAI: true)),
+                              // Followup suggestions
+                              ...appState.followupSuggestions.map((text) =>
+                                  _buildSmallChip(text, isFollowup: true)),
+                              // Static fallback chips
                               ..._suggestions.map((text) => _buildSmallChip(text)),
                               ..._customSuggestions.map((text) => _buildSmallChip(text)),
                             ],
@@ -160,12 +190,17 @@ class _InputViewState extends State<InputView> {
                               Expanded(
                                 child: ListView.builder(
                                   padding: const EdgeInsets.all(16),
-                                  itemCount: _messages.length,
-                                  itemBuilder: (context, index) =>
-                                      _buildChatBubble(
-                                    _messages[index]["text"],
-                                    _messages[index]["isMe"],
-                                  ),
+                                  itemCount: appState.messages.length,
+                                  itemBuilder: (context, index) {
+                                    final msg = appState.messages[index];
+                                    final isMe = msg['sender'] == AppConstants.kSenderA;
+                                    return _buildChatBubble(
+                                      msg['text'] ?? '',
+                                      isMe,
+                                      index,
+                                      msg['sender'] ?? 'A',
+                                    );
+                                  },
                                 ),
                               ),
                               // Text input
@@ -260,6 +295,12 @@ class _InputViewState extends State<InputView> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            // TEMPORARY TEST BUTTON — remove before final demo
+            IconButton(
+              icon: const Icon(Icons.science, color: Colors.amberAccent),
+              tooltip: 'Test: Send HELP sign',
+              onPressed: () => onSignReceived('HELP'),
+            ),
             IconButton(
               icon: const Icon(Icons.settings, color: Colors.white),
               onPressed: _showSettingsDialog,
@@ -279,63 +320,114 @@ class _InputViewState extends State<InputView> {
     );
   }
 
-  Widget _buildSmallChip(String text) {
+  Widget _buildSmallChip(String text, {bool isAI = false, bool isFollowup = false}) {
+    final appState = context.read<AppState>();
     return GestureDetector(
-      onTap: () => _sendMessage(text),
+      onTap: () {
+        if (isAI || isFollowup) {
+          appState.onSuggestionTapped(text, AppConstants.kSenderA);
+        } else {
+          _sendMessage(text);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
+          color: isAI
+              ? Colors.blueAccent.withOpacity(0.15)
+              : isFollowup
+                  ? Colors.greenAccent.withOpacity(0.1)
+                  : Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
+          border: isAI
+              ? Border.all(color: Colors.blueAccent.withOpacity(0.3))
+              : null,
         ),
         child: Text(
           text,
-          style: const TextStyle(color: Colors.white, fontSize: 13),
+          style: TextStyle(
+            color: isAI ? Colors.blueAccent : Colors.white,
+            fontSize: 13,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildChatBubble(String text, bool isMe) {
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isMe
-              ? const Color(0xFF4A5C6D)
-              : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment:
-              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              text,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
-            const SizedBox(height: 6),
-            GestureDetector(
-              onTap: () {},
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.volume_up,
-                      size: 12, color: Colors.white.withOpacity(0.5)),
-                  const SizedBox(width: 4),
-                  Text(
-                    "Listen",
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
+  Widget _buildChatBubble(String text, bool isMe, int index, String sender) {
+    return GestureDetector(
+      onLongPress: () async {
+        // Long press to edit — only works before next message from same sender
+        final controller = TextEditingController(text: text);
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF16181A),
+            title: const Text('Edit message', style: TextStyle(color: Colors.white)),
+            content: TextField(
+              controller: controller,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
             ),
-          ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final appState = context.read<AppState>();
+                  final success = await appState.editMessage(index, controller.text, sender);
+                  if (!success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cannot edit — a newer message exists')),
+                    );
+                  }
+                },
+                child: const Text('Save', style: TextStyle(color: Colors.blueAccent)),
+              ),
+            ],
+          ),
+        );
+      },
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isMe
+                ? const Color(0xFF4A5C6D)
+                : Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment:
+                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              Text(text, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => _speakText(text),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.volume_up, size: 12, color: Colors.white.withOpacity(0.5)),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Listen",
+                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -406,6 +498,12 @@ class _InputViewState extends State<InputView> {
                       onChanged: (val) {
                         setPopupState(() => _isOnlineMode = val);
                         setState(() => _isOnlineMode = val);
+                        // Sync to backend
+                        final appState = context.read<AppState>();
+                        appState.saveAdminSettings(
+                          '',
+                          {'is_online': val},
+                        );
                       },
                     ),
                     Divider(color: Colors.white.withOpacity(0.15)),

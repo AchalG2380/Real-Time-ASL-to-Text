@@ -1,7 +1,10 @@
 import numpy as np
 import os
 import json
+import sys
 import tensorflow as tf
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mlflow_utils import ASLRun
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
 from tensorflow.keras.utils import to_categorical
@@ -89,30 +92,65 @@ callbacks = [
     )
 ]
 
-print("\nTraining...")
-history = model.fit(
-    X_train, y_train_cat,
-    epochs=150,
-    batch_size=64,
-    validation_data=(X_test, y_test_cat),
-    callbacks=callbacks,
-    verbose=1
-)
+# ── MLflow run ────────────────────────────────────────────────────────────
+MLFLOW_PARAMS = {
+    "architecture": "Dense-MLP",
+    "n_classes":    NUM_CLASSES,
+    "n_samples":    len(X_train),
+    "n_val":        len(X_test),
+    "epochs":       150,
+    "batch_size":   64,
+    "learning_rate": 0.001,
+    "optimizer":    "Adam",
+    "augment_factor": 4,
+    "early_stop_patience": 15,
+    "reduce_lr_patience":  7,
+}
+MLFLOW_TAGS = {
+    "model_type": "letters",
+    "framework":  "keras-tflite",
+    "dataset":    "processed-keypoints",
+}
 
-loss, acc = model.evaluate(X_test, y_test_cat, verbose=0)
-print(f"\n✓ Test accuracy: {acc:.1%}")
+with ASLRun(
+    experiment_name="ASL-Letters",
+    run_name=f"MLP_{NUM_CLASSES}classes",
+    params=MLFLOW_PARAMS,
+    tags=MLFLOW_TAGS,
+) as mlrun:
 
-# ── Export TFLite ──────────────────────────────────────────────────────────
-converter = tf.lite.TFLiteConverter.from_keras_model(model)
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-tflite_model = converter.convert()
+    print("\nTraining...")
+    history = model.fit(
+        X_train, y_train_cat,
+        epochs=150,
+        batch_size=64,
+        validation_data=(X_test, y_test_cat),
+        callbacks=callbacks,
+        verbose=1
+    )
 
-with open(MODEL_OUT, 'wb') as f:
-    f.write(tflite_model)
-print(f"✓ Model saved: {MODEL_OUT}")
+    loss, acc = model.evaluate(X_test, y_test_cat, verbose=0)
+    print(f"\n✓ Test accuracy: {acc:.1%}")
 
-# ── Save labels ────────────────────────────────────────────────────────────
-with open(LABELS_OUT, 'w') as f:
-    json.dump(LETTERS, f)
-print(f"✓ Labels saved: {LABELS_OUT} → {LETTERS}")
-print(f"  Classes: {LETTERS}")
+    # ── Log to MLflow ──────────────────────────────────────────────────────
+    mlrun.log_keras_history(history)
+    mlrun.log_eval(test_loss=loss, test_accuracy=acc)
+    # ── Export TFLite (inside run so artifact is logged before close) ───────
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    tflite_model = converter.convert()
+
+    with open(MODEL_OUT, 'wb') as f:
+        f.write(tflite_model)
+    print(f"\u2713 Model saved: {MODEL_OUT}")
+
+    # ── Save labels ────────────────────────────────────────────────────────────
+    with open(LABELS_OUT, 'w') as f:
+        json.dump(LETTERS, f)
+    print(f"\u2713 Labels saved: {LABELS_OUT} \u2192 {LETTERS}")
+    print(f"  Classes: {LETTERS}")
+
+    # ── Log exported artifacts ──────────────────────────────────────────────
+    mlrun.log_artifact_file(MODEL_OUT)
+    mlrun.log_artifact_file(LABELS_OUT)
+    print("[MLflow] All artifacts logged. Run complete.")

@@ -1,10 +1,11 @@
 class AppConstants {
-  // ---------------------------------------------------------
-  // 1. BACKEND SETTINGS
-  // ---------------------------------------------------------
-  // This is the default local port for Python Flask/FastAPI. 
-  // We can change this later when you host your backend!
-  static const String localApiBaseUrl = 'http://127.0.0.1:5000'; 
+  static const String localApiBaseUrl = 'https://asl-retail-backend.onrender.com';
+  static const String kSenderA = 'A';
+  static const String kSenderB = 'B';
+  static const String kScreenA = 'A';
+  static const String kScreenB = 'B';
+  static const String kLangEnglish = 'en';
+  static const String kLangHindi = 'hi';
 
   // ---------------------------------------------------------
   // 2. UI STRINGS

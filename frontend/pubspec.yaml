@@ -32,19 +32,20 @@ dependencies:
   flutter:
     sdk: flutter
   provider: ^6.1.2          # state management
-  web_socket_channel: ^2.4.0 # backend comms
-  flutter_tts: ^3.8.5        # text-to-speech
-  camera: ^0.10.5+9          # camera access
-  http: ^1.2.1               # API calls
-  google_fonts: ^6.2.1       # premium fonts
+  web_socket_channel: ^3.0.3 # backend comms
+  flutter_tts: ^4.2.5        # text-to-speech
+  camera: ^0.12.0+1          # camera access
+  google_fonts: ^8.0.2       # premium fonts
   flutter_animate: ^4.5.0    # smooth animations
   shared_preferences: ^2.2.3  # offline settings storage
-  speech_to_text: ^6.6.2
+  speech_to_text: ^7.3.0
+  http: ^1.2.0
+
   
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
