@@ -295,6 +295,12 @@ class _InputViewState extends State<InputView> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
+            // TEMPORARY TEST BUTTON — remove before final demo
+            IconButton(
+              icon: const Icon(Icons.science, color: Colors.amberAccent),
+              tooltip: 'Test: Send HELP sign',
+              onPressed: () => onSignReceived('HELP'),
+            ),
             IconButton(
               icon: const Icon(Icons.settings, color: Colors.white),
               onPressed: _showSettingsDialog,
