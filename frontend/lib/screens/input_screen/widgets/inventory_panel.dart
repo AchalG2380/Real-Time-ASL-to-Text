@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../core/theme.dart';
 
 class InventoryItem {
   final String id;
@@ -60,43 +61,56 @@ class _InventoryPanelState extends State<InventoryPanel> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 400,
+      height: 420,
       decoration: BoxDecoration(
-        color: const Color(0xFF1E2025),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
+        color: AppTheme.vanillaBeige,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        border: Border.all(color: AppTheme.clayDark, width: 1.8),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.clay.withOpacity(0.4),
+            blurRadius: 32,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
       child: Column(
         children: [
+          // Handle bar
           Container(
-            margin: const EdgeInsets.only(top: 10),
-            width: 40,
+            margin: const EdgeInsets.only(top: 12),
+            width: 44,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.white38,
+              color: AppTheme.clayDark.withOpacity(0.4),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
               'Available Items',
               style: TextStyle(
-                color: Colors.white,
+                fontFamily: 'Montserrat',
+                color: AppTheme.inkBlack,
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
               ),
             ),
           ),
-          Divider(color: Colors.white.withOpacity(0.1), height: 1),
+          Divider(
+              color: AppTheme.clay.withOpacity(0.5), height: 1, thickness: 1),
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Colors.white54),
+                ? Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.inkMuted,
+                      strokeWidth: 2,
+                    ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
                       final item = _items[index];
@@ -131,18 +145,26 @@ class _ItemTile extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         decoration: BoxDecoration(
-          color: available
-              ? Colors.white.withOpacity(0.06)
-              : Colors.white.withOpacity(0.02),
-          borderRadius: BorderRadius.circular(12),
+          color: available ? AppTheme.buttercream : AppTheme.vanillaBeige,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: available
-                ? Colors.white.withOpacity(0.1)
-                : Colors.white.withOpacity(0.04),
+                ? AppTheme.clayDark
+                : AppTheme.clay.withOpacity(0.4),
+            width: 1.5,
           ),
+          boxShadow: available
+              ? [
+                  BoxShadow(
+                    color: AppTheme.clay.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           children: [
@@ -153,17 +175,24 @@ class _ItemTile extends StatelessWidget {
                   Text(
                     item.name,
                     style: TextStyle(
-                      color: available ? Colors.white : Colors.white38,
+                      fontFamily: 'Montserrat',
+                      color: available
+                          ? AppTheme.inkBlack
+                          : AppTheme.inkMuted.withOpacity(0.5),
                       fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     item.price,
                     style: TextStyle(
-                      color: available ? Colors.white54 : Colors.white24,
+                      fontFamily: 'Montserrat',
+                      color: available
+                          ? AppTheme.inkMuted
+                          : AppTheme.inkMuted.withOpacity(0.3),
                       fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -171,19 +200,26 @@ class _ItemTile extends StatelessWidget {
             ),
             if (!available)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(6),
+                  color: AppTheme.clay.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppTheme.clay.withOpacity(0.3), width: 1),
                 ),
-                child: const Text(
+                child: Text(
                   'Unavailable',
-                  style: TextStyle(color: Colors.white30, fontSize: 11),
+                  style: TextStyle(
+                      fontFamily: 'Montserrat',
+                      color: AppTheme.inkMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600),
                 ),
               )
             else
               Icon(Icons.arrow_forward_ios,
-                  color: Colors.white.withOpacity(0.2), size: 14),
+                  color: AppTheme.inkMuted.withOpacity(0.4), size: 14),
           ],
         ),
       ),

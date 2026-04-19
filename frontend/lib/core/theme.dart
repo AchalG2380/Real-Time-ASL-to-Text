@@ -1,52 +1,216 @@
 import 'package:flutter/material.dart';
 
+/// ══════════════════════════════════════════════════════════════
+///  MANEORA — Midnight Navy + Amber Design System
+///  Fonts : Archivo Black (headings) · Outfit (body/UI)
+///
+///  pubspec.yaml — add under dependencies:
+///    google_fonts: ^6.2.1
+///
+///  main.dart — wrap theme:
+///    theme: GoogleFonts.outfitTextTheme()  (see main.dart)
+///  For Archivo Black display text, use fontFamily: 'ArchivoBlack'
+///  OR GoogleFonts.archivoBlack() on individual TextStyle.
+/// ══════════════════════════════════════════════════════════════
 class AppTheme {
-  // 1. Color Palette (Metallic & Glass base)
-  static const Color deepCarbon = Color(0xFF1E1F22);
-  static const Color metallicGray = Color(0xFF3A3D40);
-  static const Color glassWhite = Colors.white;
-  static const Color textMuted = Color(0xFFA0AAB2);
 
-  // 2. Main ThemeData to inject into MaterialApp
-  static ThemeData get darkMetallicTheme {
+  // ── Core Palette ──────────────────────────────────────────────
+  static const Color bgDeep        = Color(0xFF0A0F1E);
+  static const Color bgCard        = Color(0xFF141C2E);
+  static const Color bgSurface     = Color(0xFF1A2236);
+  static const Color bgHover       = Color(0xFF1E2840);
+  static const Color borderDefault = Color(0xFF2A3652);
+  static const Color borderAmber   = Color(0xFF8A5C0F);
+
+  // ── Accent ───────────────────────────────────────────────────
+  static const Color amber         = Color(0xFFF5A623);
+  static const Color amberLight    = Color(0xFFFFD080);
+  static const Color amberDim      = Color(0xFF8A5C0F);
+  static const Color sky           = Color(0xFF4B9EFF);
+  static const Color green         = Color(0xFF3DD68C);
+
+  // ── Text ─────────────────────────────────────────────────────
+  static const Color textPrimary   = Color(0xFFF0F4FF);
+  static const Color textSecondary = Color(0xFFB0BCDA);
+  static const Color textMuted     = Color(0xFF8A95B0);
+
+  // ── Semantic ─────────────────────────────────────────────────
+  static const Color error         = Color(0xFFFF5C6A);
+  static const Color accentGreen   = Color(0xFF3DD68C);
+  static const Color accentAmber   = Color(0xFFF5A623);
+
+  // ── Legacy aliases (for files not yet updated) ────────────────
+  // These keep old references compiling during migration
+  static const Color inkBlack      = textPrimary;
+  static const Color inkSoft       = textSecondary;
+  static const Color inkMuted      = textMuted;
+  static const Color buttercream   = bgCard;
+  static const Color vanillaBeige  = bgSurface;
+  static const Color clay          = borderDefault;
+  static const Color clayDark      = borderAmber;
+
+  // ── Gradients ────────────────────────────────────────────────
+  static const LinearGradient backgroundGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF0A0F1E), Color(0xFF0F1628), Color(0xFF0A0F1E)],
+  );
+
+  static const LinearGradient cardGradient = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF141C2E), Color(0xFF111827)],
+  );
+
+  // ── Main ThemeData ────────────────────────────────────────────
+  static ThemeData get vanillaClayTheme => midnightAmberTheme;
+
+  static ThemeData get midnightAmberTheme {
     return ThemeData(
       brightness: Brightness.dark,
-      fontFamily: 'Helvetica', 
-      scaffoldBackgroundColor: deepCarbon,
-      
-      // Global Text Styling
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: glassWhite, letterSpacing: -0.5),
-        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: glassWhite),
-        bodyLarge: TextStyle(fontSize: 16, color: glassWhite),
-        bodyMedium: TextStyle(fontSize: 14, color: textMuted),
+      scaffoldBackgroundColor: bgDeep,
+      fontFamily: 'Outfit',
+
+      colorScheme: const ColorScheme.dark(
+        primary: amber,
+        secondary: sky,
+        surface: bgCard,
+        error: error,
+        onPrimary: bgDeep,
+        onSecondary: bgDeep,
+        onSurface: textPrimary,
       ),
-      
-      // Global Button Styling
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: glassWhite.withOpacity(0.08),
-          foregroundColor: glassWhite,
-          elevation: 0, 
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: glassWhite.withOpacity(0.2)),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(
+          fontFamily: 'ArchivoBlack',
+          fontSize: 36,
+          fontWeight: FontWeight.w400,
+          color: textPrimary,
+          letterSpacing: -0.5,
+        ),
+        displayMedium: TextStyle(
+          fontFamily: 'ArchivoBlack',
+          fontSize: 28,
+          fontWeight: FontWeight.w400,
+          color: textPrimary,
+        ),
+        titleLarge: TextStyle(
+          fontFamily: 'ArchivoBlack',
+          fontSize: 20,
+          fontWeight: FontWeight.w400,
+          color: textPrimary,
+          letterSpacing: 0.2,
+        ),
+        titleMedium: TextStyle(
+          fontFamily: 'Outfit',
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: textPrimary,
+        ),
+        bodyLarge: TextStyle(
+          fontFamily: 'Outfit',
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          color: textPrimary,
+          height: 1.6,
+        ),
+        bodyMedium: TextStyle(
+          fontFamily: 'Outfit',
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
+          color: textMuted,
+          height: 1.5,
+        ),
+        labelLarge: TextStyle(
+          fontFamily: 'Outfit',
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textSecondary,
+          letterSpacing: 1.8,
         ),
       ),
 
-      // Global TextField Styling
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: amber,
+          foregroundColor: bgDeep,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
+          textStyle: const TextStyle(
+            fontFamily: 'ArchivoBlack',
+            fontWeight: FontWeight.w400,
+            fontSize: 14,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: amber,
+          side: const BorderSide(color: borderDefault, width: 1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
+          textStyle: const TextStyle(
+            fontFamily: 'Outfit',
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+      ),
+
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: glassWhite.withOpacity(0.05),
-        hintStyle: const TextStyle(color: textMuted),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
+        fillColor: bgSurface,
+        hintStyle: const TextStyle(
+          color: textMuted,
+          fontFamily: 'Outfit',
+          fontSize: 14,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: borderDefault, width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: borderDefault, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: amber, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       ),
+
+      dividerTheme: const DividerThemeData(
+        color: borderDefault,
+        thickness: 1,
+        space: 0,
+      ),
+
+      dialogTheme: DialogThemeData(
+        backgroundColor: bgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: borderDefault, width: 1),
+        ),
+        titleTextStyle: const TextStyle(
+          fontFamily: 'ArchivoBlack',
+          fontSize: 20,
+          color: textPrimary,
+        ),
+      ),
+
+      iconTheme: const IconThemeData(color: textMuted, size: 22),
     );
   }
 }
