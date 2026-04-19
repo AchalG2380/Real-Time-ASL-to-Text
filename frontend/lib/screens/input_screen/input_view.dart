@@ -128,77 +128,65 @@ class _InputViewState extends State<InputView> {
                         child: GlassContainer(
                           child: Consumer<AppState>(
                             builder: (context, state, _) {
-                              // Pull the most recent detected sign from messages
-                              final lastAsl = state.messages.isNotEmpty
-                                  ? state.messages.last
-                                  : null;
-                              final bool connected = true; // WS reconnects automatically
+                              final running  = state.aslEngineRunning;
+                              final status   = state.aslEngineStatus;
+                              final starting = status.contains('Starting') || status.contains('loading');
+                              final lastAsl  = state.messages.isNotEmpty ? state.messages.last : null;
+                              final hasSign  = lastAsl != null && lastAsl['sender'] == 'A';
+
                               return Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
+                                  // Status badge
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Container(
-                                        width: 8,
-                                        height: 8,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: connected
-                                              ? const Color(0xFF44FF88)
-                                              : Colors.redAccent,
+                                      if (starting)
+                                        const SizedBox(
+                                          width: 8, height: 8,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 1.5,
+                                            color: Color(0xFFFFCA44),
+                                          ),
+                                        )
+                                      else
+                                        Container(
+                                          width: 8, height: 8,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: running ? const Color(0xFF44FF88) : Colors.redAccent,
+                                            boxShadow: running ? [BoxShadow(color: const Color(0xFF44FF88).withOpacity(0.5), blurRadius: 6)] : null,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 6),
+                                      const SizedBox(width: 8),
                                       Text(
-                                        connected
-                                            ? 'ASL Engine Live'
-                                            : 'ASL Engine Offline',
+                                        running ? 'ASL Engine Live' : starting ? 'ASL Engine Starting...' : 'ASL Engine Offline',
                                         style: TextStyle(
-                                          color: connected
-                                              ? const Color(0xFF44FF88)
-                                              : Colors.redAccent,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
-                                          letterSpacing: 0.8,
+                                          color: running ? const Color(0xFF44FF88) : starting ? const Color(0xFFFFCA44) : Colors.redAccent,
+                                          fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8,
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 24),
-                                  const Icon(
-                                    Icons.back_hand_outlined,
-                                    size: 52,
-                                    color: Colors.white24,
-                                  ),
+                                  const SizedBox(height: 20),
+                                  Icon(Icons.back_hand_outlined, size: 48, color: running ? Colors.white30 : Colors.white12),
                                   const SizedBox(height: 16),
-                                  if (lastAsl != null && lastAsl['sender'] == 'A')
+                                  if (hasSign)
                                     Text(
-                                      lastAsl['text'] ?? '',
+                                      lastAsl!['text'] ?? '',
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2),
                                     )
                                   else
-                                    const Text(
-                                      'Waiting for sign...',
-                                      style: TextStyle(
-                                        color: Colors.white38,
-                                        fontSize: 14,
-                                      ),
+                                    Text(
+                                      running ? 'Show your hand to the camera...' : starting ? 'Loading models, please wait...' : 'Camera not running',
+                                      style: TextStyle(color: running ? Colors.white38 : Colors.white24, fontSize: 13),
+                                      textAlign: TextAlign.center,
                                     ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Run combined_asl_live.py to start camera',
-                                    style: TextStyle(
-                                      color: Colors.white24,
-                                      fontSize: 11,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
+                                  if (!running && !starting) ...[
+                                    const SizedBox(height: 10),
+                                    Text(status, style: const TextStyle(color: Colors.white24, fontSize: 10), textAlign: TextAlign.center),
+                                  ],
                                 ],
                               );
                             },
