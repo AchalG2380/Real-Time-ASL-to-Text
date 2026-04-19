@@ -218,8 +218,10 @@ class AppState extends ChangeNotifier {
     messages.add({'sender': sender, 'text': text, 'originalText': text});
     notifyListeners();
 
-    if (sessionId.isNotEmpty) {
-      await ApiService.sendMessage(sessionId, sender, text);
+    // Use activeSessionId so Device B's replies go to Device A's shared session
+    final sid = activeSessionId;
+    if (sid.isNotEmpty) {
+      await ApiService.sendMessage(sid, sender, text);
     }
   }
 

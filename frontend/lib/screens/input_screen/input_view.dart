@@ -120,8 +120,50 @@ class _InputViewState extends State<InputView> {
           Container(color: const Color(0xFF16181A)),
           Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Row(
+            child: Column(
               children: [
+                // ── Session sync status banner (Device B live link indicator) ──
+                Consumer<AppState>(
+                  builder: (context, state, _) {
+                    final linked = state.linkedSessionId.isNotEmpty;
+                    if (!linked) return const SizedBox.shrink();
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8, height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.greenAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Live — Synced with Customer Device',
+                            style: TextStyle(color: Colors.greenAccent, fontSize: 12),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Polling every 3s',
+                            style: TextStyle(color: Colors.white24, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                // ── Main content row (left: camera, right: chat) ──
+                Expanded(
+                  child: Row(
+                    children: [
                 // LEFT SIDE — Camera and suggestion chips
                 Expanded(
                   flex: 4,
@@ -320,8 +362,11 @@ class _InputViewState extends State<InputView> {
                   ),
                 ),
               ],
-            ),
-          ),
+            ),         // close inner Row
+          ),           // close Expanded
+              ],
+            ),         // close Column
+          ),           // close Padding
         ],
       ),
     );
