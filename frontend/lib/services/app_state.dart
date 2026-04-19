@@ -232,10 +232,10 @@ class AppState extends ChangeNotifier {
       final extraSuggestions = List<String>.from(results[1]['suggestions'] ?? []);
 
       // Paraphrased sentence is first chip; add template suggestions below (deduped)
-      currentSuggestions = [
+      currentSuggestions = List<String>.from([
         sentence,
         ...extraSuggestions.where((s) => s.trim().toLowerCase() != sentence.trim().toLowerCase()),
-      ].take(5).toList();
+      ].take(5));
     } catch (e) {
       currentSuggestions = ['I need ${sign.toLowerCase()}'];
     }
