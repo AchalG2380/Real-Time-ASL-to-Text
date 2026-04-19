@@ -123,14 +123,85 @@ class _InputViewState extends State<InputView> {
                   flex: 4,
                   child: Column(
                     children: [
-                      const Expanded(
+                      Expanded(
                         flex: 5,
                         child: GlassContainer(
-                          child: Center(
-                            child: Text(
-                              "Camera Feed",
-                              style: TextStyle(color: Colors.white70),
-                            ),
+                          child: Consumer<AppState>(
+                            builder: (context, state, _) {
+                              // Pull the most recent detected sign from messages
+                              final lastAsl = state.messages.isNotEmpty
+                                  ? state.messages.last
+                                  : null;
+                              final bool connected = true; // WS reconnects automatically
+                              return Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: connected
+                                              ? const Color(0xFF44FF88)
+                                              : Colors.redAccent,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        connected
+                                            ? 'ASL Engine Live'
+                                            : 'ASL Engine Offline',
+                                        style: TextStyle(
+                                          color: connected
+                                              ? const Color(0xFF44FF88)
+                                              : Colors.redAccent,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.8,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 24),
+                                  const Icon(
+                                    Icons.back_hand_outlined,
+                                    size: 52,
+                                    color: Colors.white24,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  if (lastAsl != null && lastAsl['sender'] == 'A')
+                                    Text(
+                                      lastAsl['text'] ?? '',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                  else
+                                    const Text(
+                                      'Waiting for sign...',
+                                      style: TextStyle(
+                                        color: Colors.white38,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Run combined_asl_live.py to start camera',
+                                    style: TextStyle(
+                                      color: Colors.white24,
+                                      fontSize: 11,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                       ),

@@ -1,6 +1,15 @@
 import cv2
 import numpy as np
-import mediapipe.solutions as mp_solutions
+import mediapipe as mp
+import mediapipe.python.solutions as mp_solutions
+mp.solutions = mp_solutions
+
+# Protobuf ≥ 4.x fix — restore removed GetPrototype() for MediaPipe
+from google.protobuf import symbol_database as _sym_db_mod
+from google.protobuf import message_factory as _msg_factory
+_sym_db = _sym_db_mod.Default()
+if not hasattr(_sym_db, 'GetPrototype'):
+    _sym_db.GetPrototype = _msg_factory.GetMessageClass
 
 
 class KeypointExtractor:

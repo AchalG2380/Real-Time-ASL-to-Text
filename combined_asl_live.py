@@ -23,6 +23,20 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 import cv2
 import numpy as np
+import mediapipe as mp
+import mediapipe.python.solutions as mp_solutions
+mp.solutions = mp_solutions
+
+# ── Protobuf ≥ 4.x monkey-patch for MediaPipe compatibility ──────────────────
+# SymbolDatabase.GetPrototype() was removed in protobuf 4.x.
+# MediaPipe's packet_getter.py still calls it; patch it back to the modern equivalent.
+from google.protobuf import symbol_database as _sym_db_mod
+from google.protobuf import message_factory as _msg_factory
+_sym_db = _sym_db_mod.Default()
+if not hasattr(_sym_db, 'GetPrototype'):
+    _sym_db.GetPrototype = _msg_factory.GetMessageClass
+# ─────────────────────────────────────────────────────────────────────────────
+
 import tensorflow as tf
 from tensorflow import keras
 from collections import deque
@@ -31,9 +45,6 @@ from tensorflow.keras.layers import (
     LSTM, Dense, Dropout, Conv1D, MaxPooling1D,
     BatchNormalization, GlobalAveragePooling1D, Bidirectional
 )
-import mediapipe as mp
-import mediapipe.python.solutions as mp_solutions
-mp.solutions = mp_solutions
 
 # ─────────────────────────────────────────────────────────────
 # WebSocket Server — broadcasts detections to Flutter
