@@ -5,8 +5,17 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// Connects to the combined_asl_live.py WebSocket server running on
 /// ws://localhost:8765 and fires [onSign] whenever a sign is detected.
 class SocketService {
-  static const String _wsUrl = 'ws://localhost:8765';
+  static const int _wsPort = 8765;
   static const Duration _reconnectDelay = Duration(seconds: 3);
+
+  String _host = 'localhost';
+
+  /// Call before connect() to point at a different machine's ASL engine.
+  void setHost(String host) {
+    _host = host.trim().isEmpty ? 'localhost' : host.trim();
+  }
+
+  String get wsUrl => 'ws://$_host:$_wsPort';
 
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
@@ -31,12 +40,12 @@ class SocketService {
     if (_manuallyDisconnected) return;
 
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(_wsUrl));
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
       // web_socket_channel v3: must await ready to detect connection failure
       await _channel!.ready;
 
-      print('[SocketService] Connected to $_wsUrl');
+      print('[SocketService] Connected to $wsUrl');
 
       _subscription = _channel!.stream.listen(
         _onMessage,

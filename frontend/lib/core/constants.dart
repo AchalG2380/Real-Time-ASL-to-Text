@@ -1,5 +1,11 @@
 class AppConstants {
   static const String localApiBaseUrl = 'https://asl-retail-backend.onrender.com';
+
+  /// IP of the machine running combined_asl_live.py.
+  /// Device A (customer/camera machine): keep as 'localhost'
+  /// Device B (cashier): change to Device A's LAN IP, e.g. '192.168.1.42'
+  static const String aslEngineHost = 'localhost';
+
   static const String kSenderA = 'A';
   static const String kSenderB = 'B';
   static const String kScreenA = 'A';

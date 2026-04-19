@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/constants.dart';
 import 'api_service.dart';
 import 'socket_service.dart';
 import 'process_service.dart';
@@ -34,6 +36,18 @@ class AppState extends ChangeNotifier {
   final ProcessService processService = ProcessService();
   bool get aslEngineRunning => processService.isRunning;
   String get aslEngineStatus => processService.statusMessage;
+
+  // ── DEBOUNCE FILTER ───────────────────────────────────────────
+  // A sign must arrive ≥2 times within 1.2 s to be confirmed.
+  // This suppresses single-frame transitional detections.
+  String? _pendingSign;
+  int _pendingCount = 0;
+  Timer? _debounceTimer;
+  static const int _minSignCount = 2;
+  static const int _debouncMs = 1200;
+
+  // ── POLLING (Device B / cashier sync) ────────────────────────
+  Timer? _pollTimer;
 
   // ── ADMIN ─────────────────────────────────────────────────────
   String adminToken = '';
@@ -74,9 +88,14 @@ class AppState extends ChangeNotifier {
 
     // ── 4. Connect WebSocket (give Python ~3 s to start its WS server)
     await Future.delayed(const Duration(seconds: 3));
+    socketService.setHost(AppConstants.aslEngineHost);
     socketService.connect((sign, confidence, source) {
-      handleIncomingSign(sign, windowMode == 'customer_A_input' ? 'A' : 'B');
+      // Route through debounce filter — only stable signs reach handleIncomingSign
+      _onSignReceived(sign, confidence, source);
     });
+
+    // ── 5. Start polling for new messages (Device B / cashier real-time sync)
+    _startPolling();
 
     isLoading = false;
     notifyListeners();
@@ -84,9 +103,60 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _pollTimer?.cancel();
     socketService.disconnect();
     processService.stop();
     super.dispose();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // DEBOUNCE FILTER
+  // ─────────────────────────────────────────────────────────────
+
+  void _onSignReceived(String sign, double confidence, String source) {
+    final sender = windowMode == 'customer_A_input' ? 'A' : 'B';
+
+    if (sign == _pendingSign) {
+      _pendingCount++;
+    } else {
+      // Different sign detected — reset counter
+      _pendingSign = sign;
+      _pendingCount = 1;
+    }
+
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(Duration(milliseconds: _debouncMs), () {
+      if (_pendingCount >= _minSignCount && _pendingSign != null) {
+        handleIncomingSign(_pendingSign!, sender);
+      }
+      _pendingSign = null;
+      _pendingCount = 0;
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // POLLING — keeps Device B (cashier) in sync with Device A
+  // ─────────────────────────────────────────────────────────────
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      if (sessionId.isEmpty) return;
+      try {
+        final result = await ApiService.getMessages(sessionId);
+        final remote = List<Map<String, String>>.from(
+          (result['messages'] as List? ?? []).map(
+            (m) => {'sender': m['sender'] as String, 'text': m['text'] as String, 'originalText': m['text'] as String},
+          ),
+        );
+        // Only update if something new arrived
+        if (remote.length != messages.length) {
+          messages = remote;
+          notifyListeners();
+        }
+      } catch (_) {} // silently ignore poll failures
+    });
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -142,20 +212,38 @@ class AppState extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> handleIncomingSign(String sign, String screen) async {
-    // 1. Paraphrase sign and auto-post to chat
-    final recentHistory = _getRecentHistory();
-    final paraphrase = await ApiService.paraphraseSign(
-      sign,
-      recentHistory,
-      screen,
-      storeType,
-    );
-    final sentence =
-        paraphrase['paraphrased'] ?? 'I need ${sign.toLowerCase()}';
-    await addMessage(screen, sentence);
+    // Signs go to SUGGESTIONS first — user taps to confirm → then goes to chat.
+    // Run paraphrase + template suggestions in parallel.
+    loadingSuggestions = true;
+    currentSuggestions = [];
+    followupSuggestions = [];
+    notifyListeners();
 
-    // 2. Load suggestions for side panel at the same time
-    await _loadSuggestions(sign, screen);
+    final recentHistory = _getRecentHistory();
+    try {
+      final results = await Future.wait([
+        ApiService.paraphraseSign(sign, recentHistory, screen, storeType),
+        isOnline
+            ? ApiService.getTemplateSuggestions(sign, screen)
+            : ApiService.getPredefinedSuggestions(storeType, screen),
+      ]);
+
+      final sentence = results[0]['paraphrased'] ?? 'I need ${sign.toLowerCase()}';
+      final extraSuggestions = List<String>.from(results[1]['suggestions'] ?? []);
+
+      // Paraphrased sentence is first chip; add template suggestions below (deduped)
+      currentSuggestions = [
+        sentence,
+        ...extraSuggestions.where((s) => s.trim().toLowerCase() != sentence.trim().toLowerCase()),
+      ].take(5).toList();
+    } catch (e) {
+      currentSuggestions = ['I need ${sign.toLowerCase()}'];
+    }
+
+    loadingSuggestions = false;
+    notifyListeners();
+    // NOTE: addMessage() is NOT called here.
+    // The user must tap a suggestion chip to send it to chat.
   }
 
   Future<void> _loadSuggestions(String sign, String screen) async {

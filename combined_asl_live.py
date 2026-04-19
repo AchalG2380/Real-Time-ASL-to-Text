@@ -76,8 +76,15 @@ async def _broadcaster():
             ws_clients -= dead
 
 async def _ws_main():
-    async with websockets.serve(_ws_handler, "localhost", 8765):
-        print("[WS] WebSocket server running on ws://localhost:8765")
+    import socket as _socket
+    try:
+        lan_ip = _socket.gethostbyname(_socket.gethostname())
+    except Exception:
+        lan_ip = "localhost"
+    async with websockets.serve(_ws_handler, "0.0.0.0", 8765):
+        print(f"[WS] WebSocket server running on port 8765")
+        print(f"[WS]   Local:   ws://localhost:8765")
+        print(f"[WS]   Network: ws://{lan_ip}:8765  (use this on Device B)")
         await _broadcaster()
 
 def _start_ws():

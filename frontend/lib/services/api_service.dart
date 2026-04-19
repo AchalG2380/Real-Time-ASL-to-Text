@@ -81,6 +81,23 @@ class ApiService {
     }
   }
 
+  /// Polls the shared backend for all messages in a session.
+  /// Used by Device B (cashier) to stay in sync with Device A (customer).
+  static Future<Map<String, dynamic>> getMessages(String sessionId) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$baseUrl/chat/session/$sessionId/history'))
+          .timeout(const Duration(seconds: 8));
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      // Backend returns 'history'; normalise to 'messages' key
+      return {
+        'messages': data['history'] ?? data['messages'] ?? [],
+      };
+    } catch (e) {
+      return {'messages': []};
+    }
+  }
+
   static Future<void> clearSession(String sessionId) async {
     try {
       await http
