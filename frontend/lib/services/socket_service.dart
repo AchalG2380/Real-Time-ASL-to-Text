@@ -2,36 +2,43 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// Connects to the combined_asl_live.py WebSocket server running on
-/// ws://localhost:8765 and fires [onSign] whenever a sign is detected.
+/// Connects to the combined_asl_live.py WebSocket server.
+/// - Device A: registers its session ID with the Python server on connect.
+/// - Device B: receives the stored session ID automatically on connect.
 class SocketService {
   static const int _wsPort = 8765;
   static const Duration _reconnectDelay = Duration(seconds: 3);
 
   String _host = 'localhost';
 
-  /// Call before connect() to point at a different machine's ASL engine.
   void setHost(String host) {
     _host = host.trim().isEmpty ? 'localhost' : host.trim();
   }
 
   String get wsUrl => 'ws://$_host:$_wsPort';
+  bool get isDeviceB => _host != 'localhost';
 
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   Timer? _reconnectTimer;
 
-  // Callback supplied by the caller (AppState)
+  // Called when a sign is detected (Device A)
   void Function(String sign, double confidence, String source)? _onSign;
+
+  // Called when Python relays Device A's session ID (Device B auto-join)
+  void Function(String sessionId)? onSessionInfo;
+
+  // Device A provides its session ID to register with the Python server
+  String? _mySessionId;
 
   bool _manuallyDisconnected = false;
 
-  /// Call this once from AppState.initialize().
-  /// [onSign] is called on the UI isolate whenever a sign is confirmed.
   void connect(
-    void Function(String sign, double confidence, String source) onSign,
-  ) {
+    void Function(String sign, double confidence, String source) onSign, {
+    String? mySessionId,
+  }) {
     _onSign = onSign;
+    _mySessionId = mySessionId;
     _manuallyDisconnected = false;
     _tryConnect();
   }
@@ -41,11 +48,17 @@ class SocketService {
 
     try {
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-
-      // web_socket_channel v3: must await ready to detect connection failure
       await _channel!.ready;
-
       print('[SocketService] Connected to $wsUrl');
+
+      // Device A: register session ID with Python server so Device B gets it
+      if (!isDeviceB && _mySessionId != null && _mySessionId!.isNotEmpty) {
+        _channel!.sink.add(jsonEncode({
+          'type': 'session_register',
+          'session_id': _mySessionId,
+        }));
+        print('[SocketService] Registered session: $_mySessionId');
+      }
 
       _subscription = _channel!.stream.listen(
         _onMessage,
@@ -69,6 +82,18 @@ class SocketService {
   void _onMessage(dynamic raw) {
     try {
       final data = jsonDecode(raw as String) as Map<String, dynamic>;
+
+      // Session relay message from Python (Device B receives this)
+      if (data['type'] == 'session_info') {
+        final sid = data['session_id'] as String? ?? '';
+        if (sid.isNotEmpty && onSessionInfo != null) {
+          print('[SocketService] Received session_info: $sid');
+          onSessionInfo!(sid);
+        }
+        return;
+      }
+
+      // Normal sign detection message
       final sign       = data['sign']       as String? ?? '';
       final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
       final source     = data['source']     as String? ?? '';
@@ -92,7 +117,6 @@ class SocketService {
     _reconnectTimer = Timer(_reconnectDelay, _tryConnect);
   }
 
-  /// Cleanly stop the connection and cancel reconnect timers.
   void disconnect() {
     _manuallyDisconnected = true;
     _reconnectTimer?.cancel();

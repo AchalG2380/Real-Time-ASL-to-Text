@@ -96,10 +96,19 @@ class AppState extends ChangeNotifier {
     // ── 4. Connect WebSocket (give Python ~3 s to start its WS server)
     await Future.delayed(const Duration(seconds: 3));
     socketService.setHost(AppConstants.aslEngineHost);
-    socketService.connect((sign, confidence, source) {
-      // Route through debounce filter — only stable signs reach handleIncomingSign
-      _onSignReceived(sign, confidence, source);
-    });
+
+    // Device B: auto-join Device A's session when Python relays it
+    socketService.onSessionInfo = (String remoteSessionId) {
+      if (linkedSessionId != remoteSessionId) {
+        joinSession(remoteSessionId);
+        print('[AppState] Auto-joined session from Device A: $remoteSessionId');
+      }
+    };
+
+    socketService.connect(
+      (sign, confidence, source) => _onSignReceived(sign, confidence, source),
+      mySessionId: sessionId, // Device A registers this; Device B ignores it
+    );
 
     // ── 5. Start polling for new messages (Device B / cashier real-time sync)
     _startPolling();

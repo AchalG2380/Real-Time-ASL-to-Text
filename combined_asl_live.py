@@ -51,15 +51,38 @@ from tensorflow.keras.layers import (
 # ─────────────────────────────────────────────────────────────
 sign_queue       = Queue()
 ws_clients       = set()
+_stored_session_id = ""   # Device A registers its session; Device B gets it automatically
 
 async def _ws_handler(websocket):
+    global ws_clients, _stored_session_id
     ws_clients.add(websocket)
     print(f"[WS] Flutter connected  (total={len(ws_clients)})")
+
+    # Auto-send stored session ID to newly connected client (Device B)
+    if _stored_session_id:
+        try:
+            await websocket.send(json.dumps({
+                "type": "session_info",
+                "session_id": _stored_session_id
+            }))
+            print(f"[WS] Sent session_info to new client: {_stored_session_id}")
+        except Exception:
+            pass
+
     try:
-        await websocket.wait_closed()
+        # Handle incoming messages from Flutter (session registration etc.)
+        async for raw in websocket:
+            try:
+                data = json.loads(raw)
+                if data.get("type") == "session_register":
+                    _stored_session_id = data.get("session_id", "")
+                    print(f"[WS] Session registered: {_stored_session_id}")
+            except Exception:
+                pass
     finally:
         ws_clients.discard(websocket)
         print(f"[WS] Flutter disconnected (total={len(ws_clients)})")
+
 
 async def _broadcaster():
     global ws_clients                   # ← required: ws_clients -= dead would make it local otherwise
