@@ -63,7 +63,11 @@ class _InputViewState extends State<InputView> {
   void _sendMessage(String text) {
     if (text.trim().isEmpty) return;
     final appState = context.read<AppState>();
-    appState.addMessage(AppConstants.kSenderA, text.trim());
+    // Use correct sender based on which device/mode this is
+    final sender = appState.windowMode == 'customer_A_input'
+        ? AppConstants.kSenderA
+        : AppConstants.kSenderB;
+    appState.addMessage(sender, text.trim());
     _chatController.clear();
   }
 
@@ -381,10 +385,13 @@ class _InputViewState extends State<InputView> {
 
   Widget _buildSmallChip(String text, {bool isAI = false, bool isFollowup = false}) {
     final appState = context.read<AppState>();
+    final sender = appState.windowMode == 'customer_A_input'
+        ? AppConstants.kSenderA
+        : AppConstants.kSenderB;
     return GestureDetector(
       onTap: () {
         if (isAI || isFollowup) {
-          appState.onSuggestionTapped(text, AppConstants.kSenderA);
+          appState.onSuggestionTapped(text, sender);
         } else {
           _sendMessage(text);
         }
@@ -536,6 +543,89 @@ class _InputViewState extends State<InputView> {
                         ),
                       ),
                     ),
+                    Divider(color: Colors.white.withOpacity(0.15)),
+
+                    // ── Session Sync (Two-Device Demo) ─────────────────
+                    Builder(builder: (ctx) {
+                      final appState = ctx.read<AppState>();
+                      final sessionController = TextEditingController(
+                        text: appState.linkedSessionId,
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Device A: show own session ID
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Your Session ID',
+                                style: TextStyle(color: Colors.white70, fontSize: 13)),
+                            subtitle: SelectableText(
+                              appState.sessionId.isEmpty ? 'Loading...' : appState.sessionId,
+                              style: const TextStyle(
+                                  color: Colors.amber, fontSize: 11, fontFamily: 'monospace'),
+                            ),
+                          ),
+                          // Device B: join another session
+                          const Text('Join Device A Session (Cashier)',
+                              style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            Expanded(
+                              child: TextField(
+                                controller: sessionController,
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: 'Paste Device A session ID...',
+                                  hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+                                  filled: true,
+                                  fillColor: Colors.white.withOpacity(0.05),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent.withOpacity(0.8),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              ),
+                              onPressed: () {
+                                final id = sessionController.text.trim();
+                                if (id.isNotEmpty) {
+                                  context.read<AppState>().joinSession(id);
+                                  Navigator.pop(context);
+                                }
+                              },
+                              child: const Text('Link', style: TextStyle(fontSize: 12)),
+                            ),
+                          ]),
+                          if (appState.linkedSessionId.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(children: [
+                                const Icon(Icons.link, color: Colors.greenAccent, size: 14),
+                                const SizedBox(width: 4),
+                                Expanded(child: Text(
+                                  'Linked to: ${appState.linkedSessionId}',
+                                  style: const TextStyle(color: Colors.greenAccent, fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                )),
+                                TextButton(
+                                  onPressed: () {
+                                    context.read<AppState>().joinSession('');
+                                    setPopupState(() {});
+                                  },
+                                  child: const Text('Unlink', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                                ),
+                              ]),
+                            ),
+                        ],
+                      );
+                    }),
                     Divider(color: Colors.white.withOpacity(0.15)),
 
                     // Online/Offline toggle

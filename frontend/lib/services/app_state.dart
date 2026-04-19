@@ -15,6 +15,10 @@ class AppState extends ChangeNotifier {
 
   // ── SESSION ──────────────────────────────────────────────────
   String sessionId = '';
+  /// Device B sets this to Device A's session ID to receive their messages.
+  String linkedSessionId = '';
+  /// Returns linkedSessionId if set, otherwise own sessionId.
+  String get activeSessionId => linkedSessionId.isNotEmpty ? linkedSessionId : sessionId;
   String greeting = 'Hi! Please sign or type what you would like to say.';
 
   // ── MESSAGES ─────────────────────────────────────────────────
@@ -62,9 +66,12 @@ class AppState extends ChangeNotifier {
     errorMessage = '';
     notifyListeners();
 
-    // ── 1. Launch the Python ASL engine ──────────────────────────
-    processService.onStatusChange = notifyListeners;
-    processService.startAslEngine(); // fire-and-forget; UI reacts via onStatusChange
+    // ── 1. Launch the Python ASL engine (Device A only) ────────────
+    // On Device B (cashier) the engine isn't available — skip silently.
+    if (windowMode == 'customer_A_input' || AppConstants.aslEngineHost == 'localhost') {
+      processService.onStatusChange = notifyListeners;
+      processService.startAslEngine();
+    }
 
     // ── 2. Fetch backend settings ─────────────────────────────────
     try {
@@ -117,22 +124,30 @@ class AppState extends ChangeNotifier {
   void _onSignReceived(String sign, double confidence, String source) {
     final sender = windowMode == 'customer_A_input' ? 'A' : 'B';
 
-    if (sign == _pendingSign) {
-      _pendingCount++;
-    } else {
-      // Different sign detected — reset counter
-      _pendingSign = sign;
-      _pendingCount = 1;
-    }
-
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(Duration(milliseconds: _debouncMs), () {
-      if (_pendingCount >= _minSignCount && _pendingSign != null) {
-        handleIncomingSign(_pendingSign!, sender);
-      }
+    // ── Word model signs are already confirmed by Python's own
+    //    consecutive-frame logic → pass through immediately.
+    if (source == 'word_model') {
       _pendingSign = null;
       _pendingCount = 0;
-    });
+      _debounceTimer?.cancel();
+      handleIncomingSign(sign, sender);
+      return;
+    }
+
+    // ── Alphabet model: require _minSignCount consecutive same letter.
+    //    Use count-based (not timer-based) so continuous signing doesn't
+    //    perpetually reset and block delivery.
+    if (sign != _pendingSign) {
+      _pendingSign = sign;
+      _pendingCount = 1;
+    } else {
+      _pendingCount++;
+      if (_pendingCount >= _minSignCount) {
+        _pendingSign = null;
+        _pendingCount = 0;
+        handleIncomingSign(sign, sender);
+      }
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -142,14 +157,16 @@ class AppState extends ChangeNotifier {
   void _startPolling() {
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      if (sessionId.isEmpty) return;
+      if (activeSessionId.isEmpty) return;
       try {
-        final result = await ApiService.getMessages(sessionId);
-        final remote = List<Map<String, String>>.from(
-          (result['messages'] as List? ?? []).map(
-            (m) => {'sender': m['sender'] as String, 'text': m['text'] as String, 'originalText': m['text'] as String},
-          ),
-        );
+        final result = await ApiService.getMessages(activeSessionId);
+        final rawList = result['messages'] as List? ?? [];
+        final remote = rawList.map((m) {
+          // Backend may return 'sender'/'text' or 'role'/'content' — handle both
+          final sender = (m['sender'] ?? m['role'] ?? 'A') as String;
+          final text   = (m['text']   ?? m['content'] ?? '') as String;
+          return <String, String>{'sender': sender, 'text': text, 'originalText': text};
+        }).toList();
         // Only update if something new arrived
         if (remote.length != messages.length) {
           messages = remote;
@@ -174,6 +191,14 @@ class AppState extends ChangeNotifier {
     followupSuggestions = [];
     currentLanguage = 'en';
     notifyListeners();
+  }
+
+  /// Device B calls this with Device A's session ID to sync messages.
+  void joinSession(String remoteSessionId) {
+    linkedSessionId = remoteSessionId.trim();
+    messages = [];          // clear local; polling will fill them in
+    notifyListeners();
+    print('[AppState] Joined session: $linkedSessionId');
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -212,13 +237,18 @@ class AppState extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> handleIncomingSign(String sign, String screen) async {
-    // Signs go to SUGGESTIONS first — user taps to confirm → then goes to chat.
-    // Run paraphrase + template suggestions in parallel.
+    // ── Show instant fallback chips RIGHT NOW (no network wait) ──
+    final capitalized = sign[0].toUpperCase() + sign.substring(1).toLowerCase();
+    currentSuggestions = [
+      'I need $capitalized',
+      'Can I get $capitalized please?',
+      capitalized,
+    ];
     loadingSuggestions = true;
-    currentSuggestions = [];
     followupSuggestions = [];
-    notifyListeners();
+    notifyListeners(); // UI updates instantly
 
+    // ── Then enhance with backend paraphrase + template suggestions ──
     final recentHistory = _getRecentHistory();
     try {
       final results = await Future.wait([
@@ -231,19 +261,18 @@ class AppState extends ChangeNotifier {
       final sentence = results[0]['paraphrased'] ?? 'I need ${sign.toLowerCase()}';
       final extraSuggestions = List<String>.from(results[1]['suggestions'] ?? []);
 
-      // Paraphrased sentence is first chip; add template suggestions below (deduped)
       currentSuggestions = List<String>.from([
         sentence,
         ...extraSuggestions.where((s) => s.trim().toLowerCase() != sentence.trim().toLowerCase()),
       ].take(5));
     } catch (e) {
-      currentSuggestions = ['I need ${sign.toLowerCase()}'];
+      // Keep the instant fallback chips already shown — don't wipe them
     }
 
     loadingSuggestions = false;
     notifyListeners();
     // NOTE: addMessage() is NOT called here.
-    // The user must tap a suggestion chip to send it to chat.
+    // The user taps a suggestion chip to send to chat.
   }
 
   Future<void> _loadSuggestions(String sign, String screen) async {
