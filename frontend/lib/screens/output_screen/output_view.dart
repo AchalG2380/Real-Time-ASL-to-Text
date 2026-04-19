@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants.dart';
@@ -17,12 +18,34 @@ class OutputView extends StatefulWidget {
 
 class _OutputViewState extends State<OutputView> {
   final TextEditingController _replyController = TextEditingController();
+  final TextEditingController _sessionController = TextEditingController();
   final FlutterTts _flutterTts = FlutterTts();
   final ScrollController _scrollController = ScrollController();
+  Timer? _sessionPromptTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Device B: auto-prompt session link if not connected in 6s
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final isDeviceB = AppConstants.aslEngineHost != 'localhost';
+      if (isDeviceB) {
+        _sessionPromptTimer = Timer(const Duration(seconds: 6), () {
+          if (!mounted) return;
+          final state = context.read<AppState>();
+          if (state.linkedSessionId.isEmpty) {
+            _showSessionDialog();
+          }
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
     _replyController.dispose();
+    _sessionController.dispose();
+    _sessionPromptTimer?.cancel();
     _flutterTts.stop();
     _scrollController.dispose();
     super.dispose();
@@ -46,6 +69,28 @@ class _OutputViewState extends State<OutputView> {
     final appState = context.watch<AppState>();
 
     return Scaffold(
+      // ── Session link FAB — orange=unlinked, green=linked ──
+      floatingActionButtonLocation: FloatingActionButtonLocation.endTop,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Consumer<AppState>(
+          builder: (ctx, state, _) {
+            final linked = state.linkedSessionId.isNotEmpty;
+            return FloatingActionButton.small(
+              heroTag: 'output_session_fab',
+              backgroundColor: linked
+                  ? Colors.greenAccent.withOpacity(0.85)
+                  : Colors.orangeAccent.withOpacity(0.85),
+              tooltip: linked ? 'Session Linked — tap to manage' : 'Connect to Customer Session',
+              onPressed: _showSessionDialog,
+              child: Icon(
+                linked ? Icons.link : Icons.link_off,
+                color: Colors.black87, size: 20,
+              ),
+            );
+          },
+        ),
+      ),
       body: Stack(
         children: [
           // 1. BACKGROUND
@@ -284,6 +329,114 @@ class _OutputViewState extends State<OutputView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Session Connect Dialog ────────────────────────────────────
+  void _showSessionDialog() {
+    final appState = context.read<AppState>();
+    _sessionController.text = appState.linkedSessionId;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final linked = appState.linkedSessionId.isNotEmpty;
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A1D21),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: Colors.blueAccent.withOpacity(0.3)),
+            ),
+            title: Row(children: [
+              Icon(linked ? Icons.link : Icons.link_off,
+                  color: linked ? Colors.greenAccent : Colors.orangeAccent),
+              const SizedBox(width: 10),
+              Text(linked ? 'Session Linked ✓' : 'Connect to Customer',
+                  style: const TextStyle(color: Colors.white, fontSize: 18)),
+            ]),
+            content: SizedBox(
+              width: 400,
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Show Device A's session ID
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('📱 Customer Device Session ID:',
+                        style: TextStyle(color: Colors.white54, fontSize: 11)),
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      appState.sessionId.isEmpty ? 'Loading...' : appState.sessionId,
+                      style: const TextStyle(color: Colors.amber, fontSize: 13, fontFamily: 'monospace', letterSpacing: 1),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+                const Text('💻 Enter Customer Session ID below:',
+                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _sessionController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: 'Paste session ID here...',
+                    hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.06),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
+                  onChanged: (_) => setS(() {}),
+                ),
+                if (linked) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
+                    child: Row(children: [
+                      const Icon(Icons.check_circle, color: Colors.greenAccent, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('Linked: ${appState.linkedSessionId}',
+                          style: const TextStyle(color: Colors.greenAccent, fontSize: 11), overflow: TextOverflow.ellipsis)),
+                    ]),
+                  ),
+                ],
+              ]),
+            ),
+            actions: [
+              if (linked)
+                TextButton(
+                  onPressed: () { context.read<AppState>().joinSession(''); setS(() {}); },
+                  child: const Text('Unlink', style: TextStyle(color: Colors.redAccent)),
+                ),
+              TextButton(onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Close', style: TextStyle(color: Colors.white54))),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                icon: const Icon(Icons.link, size: 18),
+                label: const Text('Connect'),
+                onPressed: () {
+                  final id = _sessionController.text.trim();
+                  if (id.isNotEmpty) {
+                    context.read<AppState>().joinSession(id);
+                    setS(() {});
+                    Future.delayed(const Duration(milliseconds: 600), () {
+                      if (mounted) Navigator.pop(ctx);
+                    });
+                  }
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }

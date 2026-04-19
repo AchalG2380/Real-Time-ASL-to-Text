@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'core/constants.dart';
 import 'screens/login_screen.dart';
+import 'screens/output_screen/output_view.dart';
 import 'services/app_state.dart';
 
 void main() {
@@ -40,7 +42,6 @@ class _AppInitializerState extends State<AppInitializer> {
   @override
   void initState() {
     super.initState();
-    // Kick off backend connection the moment app opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AppState>().initialize();
     });
@@ -64,9 +65,11 @@ class _AppInitializerState extends State<AppInitializer> {
                 style: TextStyle(color: Colors.white, fontSize: 16),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'First load may take up to 50 seconds',
-                style: TextStyle(color: Colors.grey, fontSize: 12),
+              Text(
+                AppConstants.aslEngineHost != 'localhost'
+                    ? 'Cashier mode — connecting to ${AppConstants.aslEngineHost}'
+                    : 'First load may take up to 50 seconds',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
               ),
               if (appState.errorMessage.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -81,7 +84,13 @@ class _AppInitializerState extends State<AppInitializer> {
         ),
       );
     }
-    // Once loaded, go to the existing login screen
+
+    // ── Device B (tablet/cashier): skip login → go straight to cashier output ──
+    if (AppConstants.aslEngineHost != 'localhost') {
+      return const OutputView(isAdmin: true);
+    }
+
+    // ── Device A: show normal login/role selection ──
     return const LoginScreen();
   }
-}
+}
