@@ -62,12 +62,13 @@ async def _ws_handler(websocket):
         print(f"[WS] Flutter disconnected (total={len(ws_clients)})")
 
 async def _broadcaster():
+    global ws_clients                   # ← required: ws_clients -= dead would make it local otherwise
     while True:
-        await asyncio.sleep(0.04)   # ~25 times/sec
+        await asyncio.sleep(0.04)       # ~25 times/sec
         while not sign_queue.empty():
             msg = sign_queue.get()
             dead = set()
-            for ws in ws_clients:
+            for ws in list(ws_clients): # iterate a snapshot so mutation is safe
                 try:
                     await ws.send(msg)
                 except Exception:
@@ -88,7 +89,7 @@ def emit_sign(sign: str, confidence: float, source: str):
     """Call this whenever a sign is confirmed. Thread-safe."""
     msg = json.dumps({"sign": sign, "confidence": round(confidence, 3), "source": source})
     sign_queue.put(msg)
-    print(f"[WS] Emitting → {msg}")
+    print(f"[WS] Emitting -> {msg}")
 
 
 # ─────────────────────────────────────────────────────────────
