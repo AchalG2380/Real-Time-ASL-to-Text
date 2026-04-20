@@ -21,42 +21,10 @@ class AslRetailApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Build the base theme
-    final base = AppTheme.midnightAmberTheme;
-
-    // Merge Google Fonts text themes so Outfit and Archivo Black load
-    // correctly on web (where asset fonts may not resolve via fontFamily name alone).
-    final outfitTextTheme = GoogleFonts.outfitTextTheme(base.textTheme);
-
-    final mergedTheme = base.copyWith(
-      textTheme: outfitTextTheme.copyWith(
-        // Override display/title styles to use Archivo Black via Google Fonts
-        displayLarge: GoogleFonts.archivoBlack(
-          textStyle: outfitTextTheme.displayLarge,
-        ),
-        displayMedium: GoogleFonts.archivoBlack(
-          textStyle: outfitTextTheme.displayMedium,
-        ),
-        titleLarge: GoogleFonts.archivoBlack(
-          textStyle: outfitTextTheme.titleLarge,
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: base.elevatedButtonTheme.style?.copyWith(
-          textStyle: WidgetStatePropertyAll(
-            GoogleFonts.archivoBlack(
-              fontSize: 14,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ),
-      ),
-    );
-
     return MaterialApp(
       title: 'Maneora ASL Desk',
       debugShowCheckedModeBanner: false,
-      theme: mergedTheme,
+      theme: AppTheme.midnightAmberTheme,
       home: const AppInitializer(),
     );
   }

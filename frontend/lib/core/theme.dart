@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// ══════════════════════════════════════════════════════════════
 ///  MANEORA — Midnight Navy + Amber Design System
 ///  Fonts : Archivo Black (headings) · Outfit (body/UI)
-///
-///  pubspec.yaml — add under dependencies:
-///    google_fonts: ^6.2.1
-///
-///  main.dart — wrap theme:
-///    theme: GoogleFonts.outfitTextTheme()  (see main.dart)
-///  For Archivo Black display text, use fontFamily: 'ArchivoBlack'
-///  OR GoogleFonts.archivoBlack() on individual TextStyle.
+///  Both loaded via google_fonts package — no asset declaration needed.
 /// ══════════════════════════════════════════════════════════════
 class AppTheme {
 
@@ -40,7 +34,6 @@ class AppTheme {
   static const Color accentAmber   = Color(0xFFF5A623);
 
   // ── Legacy aliases (for files not yet updated) ────────────────
-  // These keep old references compiling during migration
   static const Color inkBlack      = textPrimary;
   static const Color inkSoft       = textSecondary;
   static const Color inkMuted      = textMuted;
@@ -69,7 +62,6 @@ class AppTheme {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: bgDeep,
-      fontFamily: 'Outfit',
 
       colorScheme: const ColorScheme.dark(
         primary: amber,
@@ -81,49 +73,42 @@ class AppTheme {
         onSurface: textPrimary,
       ),
 
-      textTheme: const TextTheme(
-        displayLarge: TextStyle(
-          fontFamily: 'ArchivoBlack',
+      textTheme: TextTheme(
+        displayLarge: GoogleFonts.archivoBlack(
           fontSize: 36,
           fontWeight: FontWeight.w400,
           color: textPrimary,
           letterSpacing: -0.5,
         ),
-        displayMedium: TextStyle(
-          fontFamily: 'ArchivoBlack',
+        displayMedium: GoogleFonts.archivoBlack(
           fontSize: 28,
           fontWeight: FontWeight.w400,
           color: textPrimary,
         ),
-        titleLarge: TextStyle(
-          fontFamily: 'ArchivoBlack',
+        titleLarge: GoogleFonts.archivoBlack(
           fontSize: 20,
           fontWeight: FontWeight.w400,
           color: textPrimary,
           letterSpacing: 0.2,
         ),
-        titleMedium: TextStyle(
-          fontFamily: 'Outfit',
+        titleMedium: GoogleFonts.outfit(
           fontSize: 16,
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
-        bodyLarge: TextStyle(
-          fontFamily: 'Outfit',
+        bodyLarge: GoogleFonts.outfit(
           fontSize: 15,
           fontWeight: FontWeight.w400,
           color: textPrimary,
           height: 1.6,
         ),
-        bodyMedium: TextStyle(
-          fontFamily: 'Outfit',
+        bodyMedium: GoogleFonts.outfit(
           fontSize: 13,
           fontWeight: FontWeight.w400,
           color: textMuted,
           height: 1.5,
         ),
-        labelLarge: TextStyle(
-          fontFamily: 'Outfit',
+        labelLarge: GoogleFonts.outfit(
           fontSize: 11,
           fontWeight: FontWeight.w600,
           color: textSecondary,
@@ -139,10 +124,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          padding:
-              const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
-          textStyle: const TextStyle(
-            fontFamily: 'ArchivoBlack',
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
+          textStyle: GoogleFonts.archivoBlack(
             fontWeight: FontWeight.w400,
             fontSize: 14,
             letterSpacing: 0.5,
@@ -157,10 +140,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          padding:
-              const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
-          textStyle: const TextStyle(
-            fontFamily: 'Outfit',
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 28),
+          textStyle: GoogleFonts.outfit(
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -170,9 +151,8 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: bgSurface,
-        hintStyle: const TextStyle(
+        hintStyle: GoogleFonts.outfit(
           color: textMuted,
-          fontFamily: 'Outfit',
           fontSize: 14,
         ),
         border: OutlineInputBorder(
@@ -187,8 +167,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: amber, width: 1.5),
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       ),
 
       dividerTheme: const DividerThemeData(
@@ -203,8 +182,7 @@ class AppTheme {
           borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: borderDefault, width: 1),
         ),
-        titleTextStyle: const TextStyle(
-          fontFamily: 'ArchivoBlack',
+        titleTextStyle: GoogleFonts.archivoBlack(
           fontSize: 20,
           color: textPrimary,
         ),

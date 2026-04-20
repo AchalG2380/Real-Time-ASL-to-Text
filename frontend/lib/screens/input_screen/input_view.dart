@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants.dart';
 import '../../core/theme.dart';
@@ -427,10 +428,9 @@ class _InputViewState extends State<InputView> {
                                           ),
                                         ),
                                         const SizedBox(width: 10),
-                                        const Text(
+                                        Text(
                                           'Live Translation',
-                                          style: TextStyle(
-                                            fontFamily: 'Outfit',
+                                          style: GoogleFonts.outfit(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
                                             color: AppTheme.textPrimary,
@@ -483,15 +483,14 @@ class _InputViewState extends State<InputView> {
                                       ),
                                       child: TextField(
                                         controller: _chatController,
-                                        style: const TextStyle(
+                                        style: GoogleFonts.outfit(
                                             color: AppTheme.textPrimary,
-                                            fontFamily: 'Outfit',
                                             fontWeight: FontWeight.w500),
                                         decoration: InputDecoration(
                                           hintText: 'Type or speak...',
-                                          hintStyle: const TextStyle(
+                                          hintStyle: GoogleFonts.outfit(
                                               color: AppTheme.textMuted,
-                                              fontFamily: 'Outfit'),
+                                          ),
                                           fillColor: Colors.transparent,
                                           filled: true,
                                           border: OutlineInputBorder(
@@ -627,8 +626,7 @@ class _InputViewState extends State<InputView> {
                             : starting
                                 ? 'ASL Engine Starting...'
                                 : 'ASL Engine Offline',
-                        style: TextStyle(
-                          fontFamily: 'Outfit',
+                        style: GoogleFonts.outfit(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 0.8,
@@ -654,8 +652,7 @@ class _InputViewState extends State<InputView> {
                     Text(
                       lastAsl?['text'] ?? '',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'ArchivoBlack',
+                      style: GoogleFonts.archivoBlack(
                         color: AppTheme.textPrimary,
                         fontSize: 28,
                         fontWeight: FontWeight.w400,
@@ -669,8 +666,7 @@ class _InputViewState extends State<InputView> {
                           : starting
                               ? 'Loading models, please wait...'
                               : 'Camera not running',
-                      style: TextStyle(
-                        fontFamily: 'Outfit',
+                      style: GoogleFonts.outfit(
                         color: running
                             ? AppTheme.textMuted
                             : AppTheme.textMuted.withOpacity(0.5),
@@ -737,8 +733,7 @@ class _InputViewState extends State<InputView> {
         ),
         child: Text(
           text,
-          style: TextStyle(
-            fontFamily: 'Outfit',
+          style: GoogleFonts.outfit(
             color: isAI
                 ? AppTheme.accentGreen
                 : isFollowup
@@ -772,10 +767,9 @@ class _InputViewState extends State<InputView> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Edit message',
-                    style: TextStyle(
-                      fontFamily: 'ArchivoBlack',
+                    style: GoogleFonts.archivoBlack(
                       fontWeight: FontWeight.w400,
                       color: AppTheme.textPrimary,
                       fontSize: 16,
@@ -784,9 +778,8 @@ class _InputViewState extends State<InputView> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: controller,
-                    style: const TextStyle(
+                    style: GoogleFonts.outfit(
                         color: AppTheme.textPrimary,
-                        fontFamily: 'Outfit',
                         fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
                       filled: true,
@@ -804,7 +797,7 @@ class _InputViewState extends State<InputView> {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel',
+                        child: Text('Cancel',
                             style: TextStyle(color: AppTheme.textMuted)),
                       ),
                       const SizedBox(width: 8),
@@ -822,7 +815,7 @@ class _InputViewState extends State<InputView> {
                             );
                           }
                         },
-                        child: const Text('Save'),
+                        child: Text('Save'),
                       ),
                     ],
                   ),
@@ -866,8 +859,7 @@ class _InputViewState extends State<InputView> {
             children: [
               Text(
                 text,
-                style: const TextStyle(
-                  fontFamily: 'Outfit',
+                style: GoogleFonts.outfit(
                   color: AppTheme.textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
@@ -876,17 +868,17 @@ class _InputViewState extends State<InputView> {
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: () => _speakText(text),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.volume_up,
                         size: 11, color: AppTheme.textMuted),
                     SizedBox(width: 4),
                     Text('Listen',
-                        style: TextStyle(
+                        style: GoogleFonts.outfit(
                             color: AppTheme.textMuted,
                             fontSize: 10,
-                            fontFamily: 'Outfit')),
+                        )),
                   ],
                 ),
               ),
@@ -916,11 +908,10 @@ class _InputViewState extends State<InputView> {
               ),
             ],
           ),
-          child: const Center(
+          child: Center(
             child: Text(
-              'View Available Items',
-              style: TextStyle(
-                fontFamily: 'Outfit',
+               'View Available Items',
+              style: GoogleFonts.outfit(
                 fontWeight: FontWeight.w700,
                 color: AppTheme.textPrimary,
                 fontSize: 14,
@@ -991,10 +982,9 @@ class _InputViewState extends State<InputView> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Admin Settings',
-                        style: TextStyle(
-                          fontFamily: 'ArchivoBlack',
+                        style: GoogleFonts.archivoBlack(
                           fontWeight: FontWeight.w400,
                           fontSize: 20,
                           color: AppTheme.textPrimary,
@@ -1006,19 +996,17 @@ class _InputViewState extends State<InputView> {
                       _settingsCard(
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Current Portal',
-                                      style: TextStyle(
+                                      style: GoogleFonts.outfit(
                                           color: AppTheme.textMuted,
-                                          fontFamily: 'Outfit',
                                           fontSize: 12)),
                                   Text('Input Mode (Sign)',
-                                      style: TextStyle(
+                                      style: GoogleFonts.outfit(
                                         color: AppTheme.accentGreen,
-                                        fontFamily: 'Outfit',
                                         fontWeight: FontWeight.w700,
                                       )),
                                 ],
@@ -1044,20 +1032,18 @@ class _InputViewState extends State<InputView> {
                       _settingsCard(
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Online Mode',
-                                      style: TextStyle(
-                                          fontFamily: 'Outfit',
+                                      style: GoogleFonts.outfit(
                                           fontWeight: FontWeight.w700,
                                           color: AppTheme.textPrimary)),
                                   Text('Toggle online/offline mode',
-                                      style: TextStyle(
+                                      style: GoogleFonts.outfit(
                                           fontSize: 11,
-                                          color: AppTheme.textMuted,
-                                          fontFamily: 'Outfit')),
+                                          color: AppTheme.textMuted)),
                                 ],
                               ),
                             ),
@@ -1081,19 +1067,17 @@ class _InputViewState extends State<InputView> {
                       _settingsCard(
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Text('Store Category',
-                                  style: TextStyle(
-                                      fontFamily: 'Outfit',
+                                  style: GoogleFonts.outfit(
                                       fontWeight: FontWeight.w700,
                                       color: AppTheme.textPrimary)),
                             ),
                             DropdownButton<String>(
                               dropdownColor: AppTheme.bgCard,
                               value: _storeType,
-                              style: const TextStyle(
+                              style: GoogleFonts.outfit(
                                   color: AppTheme.textPrimary,
-                                  fontFamily: 'Outfit',
                                   fontWeight: FontWeight.w600),
                               underline: const SizedBox(),
                               items: ['Retail', 'Bakery', 'Cafe']
@@ -1113,22 +1097,21 @@ class _InputViewState extends State<InputView> {
                       const SizedBox(height: 20),
 
                       // Custom suggestions
-                      const Text(
+                      Text(
                         'Custom Suggestions',
-                        style: TextStyle(
-                          fontFamily: 'ArchivoBlack',
+                        style: GoogleFonts.archivoBlack(
                           fontWeight: FontWeight.w400,
                           fontSize: 15,
                           color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Add your own suggestion chips to the sign screen.',
-                        style: TextStyle(
+                        style: GoogleFonts.outfit(
                             color: AppTheme.textMuted,
                             fontSize: 12,
-                            fontFamily: 'Outfit'),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -1143,20 +1126,18 @@ class _InputViewState extends State<InputView> {
                               ),
                               child: TextField(
                                 controller: _customSuggestionController,
-                                style: const TextStyle(
+                                style: GoogleFonts.outfit(
                                     color: AppTheme.textPrimary,
-                                    fontFamily: 'Outfit',
                                     fontWeight: FontWeight.w500,
                                     fontSize: 13),
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   hintText: 'e.g. Do you accept UPI?',
-                                  hintStyle: TextStyle(
+                                  hintStyle: GoogleFonts.outfit(
                                       color: AppTheme.textMuted,
-                                      fontFamily: 'Outfit',
                                       fontSize: 13),
                                   fillColor: Colors.transparent,
                                   filled: true,
-                                  border: OutlineInputBorder(
+                                  border: const OutlineInputBorder(
                                     borderRadius:
                                         BorderRadius.all(Radius.circular(12)),
                                     borderSide: BorderSide.none,
@@ -1210,9 +1191,8 @@ class _InputViewState extends State<InputView> {
                               children: [
                                 Expanded(
                                   child: Text(e.value,
-                                      style: const TextStyle(
+                                      style: GoogleFonts.outfit(
                                           color: AppTheme.textPrimary,
-                                          fontFamily: 'Outfit',
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600)),
                                 ),
@@ -1230,11 +1210,11 @@ class _InputViewState extends State<InputView> {
                           );
                         })
                       else
-                        const Text('No custom suggestions added yet.',
-                            style: TextStyle(
+                        Text('No custom suggestions added yet.',
+                            style: GoogleFonts.outfit(
                                 color: AppTheme.textMuted,
                                 fontSize: 12,
-                                fontFamily: 'Outfit')),
+                            )),
                       const SizedBox(height: 20),
                       Align(
                         alignment: Alignment.centerRight,

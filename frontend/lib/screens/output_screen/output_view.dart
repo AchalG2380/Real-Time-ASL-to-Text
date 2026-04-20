@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants.dart';
 import '../../core/theme.dart';
 import '../../services/app_state.dart';
@@ -24,10 +25,12 @@ class _OutputViewState extends State<OutputView> {
   final ScrollController _scrollController = ScrollController();
   Timer? _sessionPromptTimer;
 
+  // ── Language state ────────────────────────────────────────────
+  String _selectedLanguage = AppConstants.kLangEnglish; // 'en' or 'hi'
+
   @override
   void initState() {
     super.initState();
-    // Device B: auto-prompt session link if not connected in 6s
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final isDeviceB = AppConstants.aslEngineHost != 'localhost';
       if (isDeviceB) {
@@ -42,7 +45,7 @@ class _OutputViewState extends State<OutputView> {
     });
   }
 
-  // Settings state — lifted to widget state so they persist while screen is open
+  // Settings state
   bool _isOnlineMode = false;
   String _storeType = 'Retail';
   final List<String> _customSuggestions = [];
@@ -61,7 +64,9 @@ class _OutputViewState extends State<OutputView> {
   }
 
   Future<void> _speakText(String text) async {
-    await _flutterTts.setLanguage('en-US');
+    await _flutterTts.setLanguage(
+      _selectedLanguage == AppConstants.kLangHindi ? 'hi-IN' : 'en-US',
+    );
     await _flutterTts.speak(text);
   }
 
@@ -73,11 +78,17 @@ class _OutputViewState extends State<OutputView> {
     _replyController.clear();
   }
 
+  /// Switch display language and trigger translation via AppState
+  Future<void> _onLanguageChanged(String? langCode) async {
+    if (langCode == null || langCode == _selectedLanguage) return;
+    setState(() => _selectedLanguage = langCode);
+    await context.read<AppState>().switchLanguage(langCode);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
-    // Merge smart suggestions + custom suggestions
     final List<String> allSuggestions = [
       ...appState.currentSuggestions.isNotEmpty
           ? appState.currentSuggestions
@@ -88,7 +99,6 @@ class _OutputViewState extends State<OutputView> {
     ];
 
     return Scaffold(
-      // ── Session link FAB — orange=unlinked, green=linked ──
       floatingActionButtonLocation: FloatingActionButtonLocation.endTop,
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(top: 12),
@@ -100,11 +110,14 @@ class _OutputViewState extends State<OutputView> {
               backgroundColor: linked
                   ? Colors.greenAccent.withOpacity(0.85)
                   : Colors.orangeAccent.withOpacity(0.85),
-              tooltip: linked ? 'Session Linked — tap to manage' : 'Connect to Customer Session',
+              tooltip: linked
+                  ? 'Session Linked — tap to manage'
+                  : 'Connect to Customer Session',
               onPressed: _showSessionDialog,
               child: Icon(
                 linked ? Icons.link : Icons.link_off,
-                color: Colors.black87, size: 20,
+                color: Colors.black87,
+                size: 20,
               ),
             );
           },
@@ -117,33 +130,39 @@ class _OutputViewState extends State<OutputView> {
             padding: const EdgeInsets.all(24.0),
             child: Row(
               children: [
-                // ── LEFT: Chat ─────────────────────────────────────────
+                // ── LEFT: Chat ────────────────────────────────────────
                 Expanded(
                   flex: 6,
                   child: GlassContainer(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Header
+                        // ── Header with language dropdown ─────────────
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+                          padding: const EdgeInsets.fromLTRB(24, 24, 16, 0),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
+                              Text(
                                 'Live ASL Translation',
-                                style: TextStyle(
-                                  fontFamily: 'ArchivoBlack',
+                                style: GoogleFonts.archivoBlack(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w400,
                                   color: AppTheme.textPrimary,
                                   letterSpacing: -0.5,
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.volume_up,
-                                    color: AppTheme.textSecondary),
-                                onPressed: () {},
+                              Row(
+                                children: [
+                                  // ── Language dropdown ─────────────────
+                                  _buildLanguageDropdown(),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: const Icon(Icons.volume_up,
+                                        color: AppTheme.textSecondary),
+                                    onPressed: () {},
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -155,7 +174,7 @@ class _OutputViewState extends State<OutputView> {
                           thickness: 1,
                         ),
 
-                        // Messages
+                        // ── Messages ──────────────────────────────────
                         Expanded(
                           child: appState.messages.isEmpty
                               ? Center(
@@ -169,10 +188,9 @@ class _OutputViewState extends State<OutputView> {
                                             .withOpacity(0.2),
                                       ),
                                       const SizedBox(height: 16),
-                                      const Text(
+                                      Text(
                                         'Awaiting input...',
-                                        style: TextStyle(
-                                          fontFamily: 'Outfit',
+                                        style: GoogleFonts.outfit(
                                           color: AppTheme.textMuted,
                                           fontSize: 16,
                                           fontWeight: FontWeight.w500,
@@ -240,8 +258,7 @@ class _OutputViewState extends State<OutputView> {
                                             children: [
                                               Text(
                                                 msg['text'] ?? '',
-                                                style: const TextStyle(
-                                                  fontFamily: 'Outfit',
+                                                style: GoogleFonts.outfit(
                                                   color: AppTheme.textPrimary,
                                                   fontSize: 16,
                                                   fontWeight: FontWeight.w500,
@@ -261,7 +278,7 @@ class _OutputViewState extends State<OutputView> {
                                 ),
                         ),
 
-                        // Input
+                        // ── Reply input — stars icon removed ──────────
                         Padding(
                           padding: const EdgeInsets.all(20.0),
                           child: Container(
@@ -280,16 +297,16 @@ class _OutputViewState extends State<OutputView> {
                             ),
                             child: TextField(
                               controller: _replyController,
-                              style: const TextStyle(
-                                  color: AppTheme.textPrimary,
-                                  fontFamily: 'Outfit',
-                                  fontWeight: FontWeight.w500),
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.textPrimary,
+                                fontWeight: FontWeight.w500,
+                              ),
                               onSubmitted: (_) => _sendReply(),
                               decoration: InputDecoration(
                                 hintText: 'Type a reply...',
-                                hintStyle: const TextStyle(
-                                    color: AppTheme.textMuted,
-                                    fontFamily: 'Outfit'),
+                                hintStyle: GoogleFonts.outfit(
+                                  color: AppTheme.textMuted,
+                                ),
                                 fillColor: Colors.transparent,
                                 filled: true,
                                 border: OutlineInputBorder(
@@ -301,74 +318,19 @@ class _OutputViewState extends State<OutputView> {
                                       color: AppTheme.textMuted),
                                   onPressed: () {},
                                 ),
-                                suffixIcon: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Tooltip(
-                                      message: 'Smart Suggestions',
-                                      child: PopupMenuButton<String>(
-                                        icon: const Icon(Icons.auto_awesome,
-                                            color: AppTheme.accentAmber,
-                                            size: 20),
-                                        color: AppTheme.bgCard,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14),
-                                          side: const BorderSide(
-                                              color: AppTheme.borderAmber,
-                                              width: 1.5),
-                                        ),
-                                        tooltip: '',
-                                        itemBuilder: (BuildContext context) {
-                                          final appState =
-                                              context.read<AppState>();
-                                          final suggestions = appState
-                                                  .currentSuggestions
-                                                  .isNotEmpty
-                                              ? appState.currentSuggestions
-                                              : AppConstants.adminSuggestions;
-                                          final combined = [
-                                            ...suggestions,
-                                            ..._customSuggestions,
-                                          ];
-                                          return combined.map((choice) {
-                                            return PopupMenuItem<String>(
-                                              value: choice,
-                                              child: Text(choice,
-                                                  style: const TextStyle(
-                                                      fontFamily: 'Outfit',
-                                                      color:
-                                                          AppTheme.textPrimary,
-                                                      fontWeight:
-                                                          FontWeight.w600)),
-                                            );
-                                          }).toList();
-                                        },
-                                        onSelected: (value) {
-                                          final appState =
-                                              context.read<AppState>();
-                                          appState.onSuggestionTapped(
-                                              value, AppConstants.kSenderB);
-                                          _replyController.text = value;
-                                        },
-                                      ),
-                                    ),
-                                    Container(
-                                      margin: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.borderAmber
-                                            .withOpacity(0.15),
-                                        borderRadius:
-                                            BorderRadius.circular(10),
-                                      ),
-                                      child: IconButton(
-                                        icon: const Icon(Icons.send,
-                                            color: AppTheme.amber,
-                                            size: 18),
-                                        onPressed: _sendReply,
-                                      ),
-                                    ),
-                                  ],
+                                // ── suffixIcon: send button only (stars removed) ──
+                                suffixIcon: Container(
+                                  margin: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.borderAmber
+                                        .withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: IconButton(
+                                    icon: const Icon(Icons.send,
+                                        color: AppTheme.amber, size: 18),
+                                    onPressed: _sendReply,
+                                  ),
                                 ),
                               ),
                             ),
@@ -419,8 +381,7 @@ class _OutputViewState extends State<OutputView> {
                                       const SizedBox(height: 8),
                                       Text(
                                         'Camera Mirror',
-                                        style: TextStyle(
-                                          fontFamily: 'Outfit',
+                                        style: GoogleFonts.outfit(
                                           color: AppTheme.textMuted
                                               .withOpacity(0.5),
                                           fontSize: 12,
@@ -457,17 +418,16 @@ class _OutputViewState extends State<OutputView> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Smart Replies
+                      // Smart Replies panel
                       Expanded(
                         flex: 4,
                         child: GlassContainer(
                           child: ListView(
                             padding: const EdgeInsets.all(16),
                             children: [
-                              const Text(
+                              Text(
                                 'Smart Replies',
-                                style: TextStyle(
-                                  fontFamily: 'ArchivoBlack',
+                                style: GoogleFonts.archivoBlack(
                                   fontWeight: FontWeight.w400,
                                   color: AppTheme.textPrimary,
                                   fontSize: 14,
@@ -477,13 +437,11 @@ class _OutputViewState extends State<OutputView> {
                               const SizedBox(height: 12),
                               ...allSuggestions.map((suggestion) {
                                 return Padding(
-                                  padding:
-                                      const EdgeInsets.only(bottom: 8.0),
+                                  padding: const EdgeInsets.only(bottom: 8.0),
                                   child: GestureDetector(
                                     onTap: () {
                                       appState.onSuggestionTapped(
-                                          suggestion,
-                                          AppConstants.kSenderB);
+                                          suggestion, AppConstants.kSenderB);
                                       _replyController.text = suggestion;
                                     },
                                     child: Container(
@@ -507,8 +465,7 @@ class _OutputViewState extends State<OutputView> {
                                       ),
                                       child: Text(
                                         suggestion,
-                                        style: const TextStyle(
-                                          fontFamily: 'Outfit',
+                                        style: GoogleFonts.outfit(
                                           color: AppTheme.textPrimary,
                                           fontWeight: FontWeight.w600,
                                           fontSize: 13,
@@ -539,6 +496,60 @@ class _OutputViewState extends State<OutputView> {
     );
   }
 
+  // ── Language dropdown widget ────────────────────────────────────
+  Widget _buildLanguageDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppTheme.bgSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.borderDefault, width: 1),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedLanguage,
+          dropdownColor: AppTheme.bgCard,
+          isDense: true,
+          icon: const Icon(
+            Icons.expand_more,
+            color: AppTheme.textMuted,
+            size: 18,
+          ),
+          style: GoogleFonts.outfit(
+            color: AppTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+          items: const [
+            DropdownMenuItem(
+              value: AppConstants.kLangEnglish,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('🇺🇸', style: TextStyle(fontSize: 14)),
+                  SizedBox(width: 6),
+                  Text('EN'),
+                ],
+              ),
+            ),
+            DropdownMenuItem(
+              value: AppConstants.kLangHindi,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('🇮🇳', style: TextStyle(fontSize: 14)),
+                  SizedBox(width: 6),
+                  Text('हिं'),
+                ],
+              ),
+            ),
+          ],
+          onChanged: _onLanguageChanged,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAdminSettingsRow(BuildContext context) {
     return SizedBox(
       height: 64,
@@ -556,7 +567,8 @@ class _OutputViewState extends State<OutputView> {
               endIndent: 12,
             ),
             IconButton(
-              icon: const Icon(Icons.swap_horiz, color: AppTheme.textSecondary),
+              icon: const Icon(Icons.swap_horiz,
+                  color: AppTheme.textSecondary),
               onPressed: () => Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
@@ -584,82 +596,149 @@ class _OutputViewState extends State<OutputView> {
             backgroundColor: const Color(0xFF1A1D21),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: Colors.blueAccent.withOpacity(0.3)),
+              side:
+                  BorderSide(color: Colors.blueAccent.withOpacity(0.3)),
             ),
             title: Row(children: [
               Icon(linked ? Icons.link : Icons.link_off,
-                  color: linked ? Colors.greenAccent : Colors.orangeAccent),
+                  color: linked
+                      ? Colors.greenAccent
+                      : Colors.orangeAccent),
               const SizedBox(width: 10),
-              Text(linked ? 'Session Linked ✓' : 'Connect to Customer',
-                  style: const TextStyle(color: Colors.white, fontSize: 18)),
+              Text(
+                linked ? 'Session Linked ✓' : 'Connect to Customer',
+                style: GoogleFonts.archivoBlack(
+                  color: Colors.white,
+                  fontSize: 18,
+                ),
+              ),
             ]),
             content: SizedBox(
               width: 400,
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Show Device A's session ID
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.04),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('📱 Customer Device Session ID:',
-                        style: TextStyle(color: Colors.white54, fontSize: 11)),
-                    const SizedBox(height: 6),
-                    SelectableText(
-                      appState.sessionId.isEmpty ? 'Loading...' : appState.sessionId,
-                      style: const TextStyle(color: Colors.amber, fontSize: 13, fontFamily: 'monospace', letterSpacing: 1),
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 16),
-                const Text('💻 Enter Customer Session ID below:',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _sessionController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: 'Paste session ID here...',
-                    hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.06),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                  onChanged: (_) => setS(() {}),
-                ),
-                if (linked) ...[
-                  const SizedBox(height: 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.08), borderRadius: BorderRadius.circular(8)),
-                    child: Row(children: [
-                      const Icon(Icons.check_circle, color: Colors.greenAccent, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text('Linked: ${appState.linkedSessionId}',
-                          style: const TextStyle(color: Colors.greenAccent, fontSize: 11), overflow: TextOverflow.ellipsis)),
-                    ]),
+                    padding: const EdgeInsets.all(12),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '📱 Customer Device Session ID:',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white54,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          appState.sessionId.isEmpty
+                              ? 'Loading...'
+                              : appState.sessionId,
+                          style: GoogleFonts.robotoMono(
+                            color: Colors.amber,
+                            fontSize: 13,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    '💻 Enter Customer Session ID below:',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _sessionController,
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 13,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Paste session ID here...',
+                      hintStyle: GoogleFonts.outfit(
+                        color: Colors.white30,
+                        fontSize: 12,
+                      ),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.06),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onChanged: (_) => setS(() {}),
+                  ),
+                  if (linked) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.check_circle,
+                            color: Colors.greenAccent, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Linked: ${appState.linkedSessionId}',
+                            style: GoogleFonts.outfit(
+                              color: Colors.greenAccent,
+                              fontSize: 11,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ]),
+                    ),
+                  ],
                 ],
-              ]),
+              ),
             ),
             actions: [
               if (linked)
                 TextButton(
-                  onPressed: () { context.read<AppState>().joinSession(''); setS(() {}); },
-                  child: const Text('Unlink', style: TextStyle(color: Colors.redAccent)),
+                  onPressed: () {
+                    context.read<AppState>().joinSession('');
+                    setS(() {});
+                  },
+                  child: Text(
+                    'Unlink',
+                    style: GoogleFonts.outfit(color: Colors.redAccent),
+                  ),
                 ),
-              TextButton(onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close', style: TextStyle(color: Colors.white54))),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Close',
+                  style: GoogleFonts.outfit(color: Colors.white54),
+                ),
+              ),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                ),
                 icon: const Icon(Icons.link, size: 18),
-                label: const Text('Connect'),
+                label: Text('Connect', style: GoogleFonts.outfit()),
                 onPressed: () {
                   final id = _sessionController.text.trim();
                   if (id.isNotEmpty) {
@@ -688,8 +767,8 @@ class _OutputViewState extends State<OutputView> {
               backgroundColor: AppTheme.bgCard,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
-                side:
-                    const BorderSide(color: AppTheme.borderAmber, width: 1.5),
+                side: const BorderSide(
+                    color: AppTheme.borderAmber, width: 1.5),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(28),
@@ -698,10 +777,9 @@ class _OutputViewState extends State<OutputView> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Admin Settings',
-                        style: TextStyle(
-                          fontFamily: 'ArchivoBlack',
+                        style: GoogleFonts.archivoBlack(
                           fontWeight: FontWeight.w400,
                           fontSize: 20,
                           color: AppTheme.textPrimary,
@@ -713,17 +791,21 @@ class _OutputViewState extends State<OutputView> {
                       _card(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text('Current Portal',
-                                style: TextStyle(
-                                    color: AppTheme.textMuted,
-                                    fontFamily: 'Outfit',
-                                    fontSize: 12)),
-                            Text('Output Mode (Read)',
-                                style: TextStyle(
-                                    color: AppTheme.accentGreen,
-                                    fontFamily: 'Outfit',
-                                    fontWeight: FontWeight.w700)),
+                          children: [
+                            Text(
+                              'Current Portal',
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                            Text(
+                              'Output Mode (Read)',
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.accentGreen,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -733,20 +815,24 @@ class _OutputViewState extends State<OutputView> {
                       _card(
                         child: Row(
                           children: [
-                            const Expanded(
+                            Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Online Mode',
-                                      style: TextStyle(
-                                          fontFamily: 'Outfit',
-                                          fontWeight: FontWeight.w700,
-                                          color: AppTheme.textPrimary)),
-                                  Text('Toggle online/offline mode',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppTheme.textMuted,
-                                          fontFamily: 'Outfit')),
+                                  Text(
+                                    'Online Mode',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Toggle online/offline mode',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      color: AppTheme.textMuted,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -767,21 +853,23 @@ class _OutputViewState extends State<OutputView> {
                       _card(
                         child: Row(
                           children: [
-                            const Expanded(
-                              child: Text('Store Category',
-                                  style: TextStyle(
-                                      fontFamily: 'Outfit',
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.textPrimary)),
+                            Expanded(
+                              child: Text(
+                                'Store Category',
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
                             ),
                             DropdownButton<String>(
                               dropdownColor: AppTheme.bgCard,
                               value: _storeType,
                               underline: const SizedBox(),
-                              style: const TextStyle(
-                                  color: AppTheme.textPrimary,
-                                  fontFamily: 'Outfit',
-                                  fontWeight: FontWeight.w600),
+                              style: GoogleFonts.outfit(
+                                color: AppTheme.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
                               items: ['Retail', 'Bakery', 'Cafe']
                                   .map((v) => DropdownMenuItem(
                                       value: v, child: Text(v)))
@@ -799,22 +887,21 @@ class _OutputViewState extends State<OutputView> {
                       const SizedBox(height: 20),
 
                       // Custom suggestions
-                      const Text(
+                      Text(
                         'Custom Suggestions',
-                        style: TextStyle(
-                          fontFamily: 'ArchivoBlack',
+                        style: GoogleFonts.archivoBlack(
                           fontWeight: FontWeight.w400,
                           fontSize: 15,
                           color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Add your own reply chips to the output screen.',
-                        style: TextStyle(
-                            color: AppTheme.textMuted,
-                            fontSize: 12,
-                            fontFamily: 'Outfit'),
+                        style: GoogleFonts.outfit(
+                          color: AppTheme.textMuted,
+                          fontSize: 12,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -829,17 +916,17 @@ class _OutputViewState extends State<OutputView> {
                               ),
                               child: TextField(
                                 controller: _customSuggestionController,
-                                style: const TextStyle(
-                                    color: AppTheme.textPrimary,
-                                    fontFamily: 'Outfit',
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 13),
+                                style: GoogleFonts.outfit(
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 13,
+                                ),
                                 decoration: InputDecoration(
                                   hintText: 'e.g. Here is your order!',
-                                  hintStyle: const TextStyle(
-                                      color: AppTheme.textMuted,
-                                      fontFamily: 'Outfit',
-                                      fontSize: 13),
+                                  hintStyle: GoogleFonts.outfit(
+                                    color: AppTheme.textMuted,
+                                    fontSize: 13,
+                                  ),
                                   fillColor: Colors.transparent,
                                   filled: true,
                                   border: OutlineInputBorder(
@@ -888,17 +975,20 @@ class _OutputViewState extends State<OutputView> {
                               color: AppTheme.bgSurface,
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                  color: AppTheme.borderDefault, width: 1.5),
+                                  color: AppTheme.borderDefault,
+                                  width: 1.5),
                             ),
                             child: Row(
                               children: [
                                 Expanded(
-                                  child: Text(e.value,
-                                      style: const TextStyle(
-                                          color: AppTheme.textPrimary,
-                                          fontFamily: 'Outfit',
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600)),
+                                  child: Text(
+                                    e.value,
+                                    style: GoogleFonts.outfit(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                                 GestureDetector(
                                   onTap: () {
@@ -914,17 +1004,24 @@ class _OutputViewState extends State<OutputView> {
                           );
                         })
                       else
-                        const Text('No custom suggestions added yet.',
-                            style: TextStyle(
-                                color: AppTheme.textMuted,
-                                fontSize: 12,
-                                fontFamily: 'Outfit')),
+                        Text(
+                          'No custom suggestions added yet.',
+                          style: GoogleFonts.outfit(
+                            color: AppTheme.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
                       const SizedBox(height: 24),
                       Align(
                         alignment: Alignment.centerRight,
                         child: ElevatedButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('Done'),
+                          child: Text(
+                            'Done',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ),
                     ],

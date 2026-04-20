@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../../../core/theme.dart';
 
@@ -90,8 +91,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Text(
               'Available Items',
-              style: TextStyle(
-                fontFamily: 'Montserrat',
+              style: GoogleFonts.outfit(
                 color: AppTheme.inkBlack,
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
@@ -174,8 +174,7 @@ class _ItemTile extends StatelessWidget {
                 children: [
                   Text(
                     item.name,
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
+                    style: GoogleFonts.outfit(
                       color: available
                           ? AppTheme.inkBlack
                           : AppTheme.inkMuted.withOpacity(0.5),
@@ -186,8 +185,7 @@ class _ItemTile extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     item.price,
-                    style: TextStyle(
-                      fontFamily: 'Montserrat',
+                    style: GoogleFonts.outfit(
                       color: available
                           ? AppTheme.inkMuted
                           : AppTheme.inkMuted.withOpacity(0.3),
@@ -210,8 +208,7 @@ class _ItemTile extends StatelessWidget {
                 ),
                 child: Text(
                   'Unavailable',
-                  style: TextStyle(
-                      fontFamily: 'Montserrat',
+                  style: GoogleFonts.outfit(
                       color: AppTheme.inkMuted,
                       fontSize: 11,
                       fontWeight: FontWeight.w600),
