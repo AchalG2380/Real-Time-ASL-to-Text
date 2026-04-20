@@ -324,168 +324,213 @@ class _InputViewState extends State<InputView> {
         decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Row(
+          child: Column(
             children: [
-              // ── LEFT: Camera + Suggestions ─────────────────────────
-              Expanded(
-                flex: 4,
-                child: Column(
-                  children: [
-                    // Camera acrylic frame
-                    Expanded(
-                      flex: 5,
-                      child: _buildAcrylicCameraFrame(appState),
+              // ── Session sync status banner (Device B live link indicator) ──
+              Consumer<AppState>(
+                builder: (context, state, _) {
+                  final linked = state.linkedSessionId.isNotEmpty;
+                  if (!linked) return const SizedBox.shrink();
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
                     ),
-                    const SizedBox(height: 16),
-                    // Suggestion chips
-                    GlassContainer(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14.0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          alignment: WrapAlignment.center,
-                          children: [
-                            ...appState.currentSuggestions
-                                .map((t) => _buildChip(t, isAI: true)),
-                            ...appState.followupSuggestions
-                                .map((t) => _buildChip(t, isFollowup: true)),
-                            ..._suggestions.map((t) => _buildChip(t)),
-                            ..._customSuggestions.map((t) => _buildChip(t)),
-                          ],
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8, height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.greenAccent,
+                            shape: BoxShape.circle,
+                          ),
                         ),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'Live — Synced with Customer Device',
+                          style: TextStyle(color: Colors.greenAccent, fontSize: 12),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Polling every 3s',
+                          style: TextStyle(color: Colors.white24, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              // ── Main content row (left: camera, right: chat) ──
+              Expanded(
+                child: Row(
+                  children: [
+                    // ── LEFT: Camera + Suggestions ─────────────────────────
+                    Expanded(
+                      flex: 4,
+                      child: Column(
+                        children: [
+                          // Camera acrylic frame
+                          Expanded(
+                            flex: 5,
+                            child: _buildAcrylicCameraFrame(appState),
+                          ),
+                          const SizedBox(height: 16),
+                          // Suggestion chips
+                          GlassContainer(
+                            child: Padding(
+                              padding: const EdgeInsets.all(14.0),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  ...appState.currentSuggestions
+                                      .map((t) => _buildChip(t, isAI: true)),
+                                  ...appState.followupSuggestions
+                                      .map((t) => _buildChip(t, isFollowup: true)),
+                                  ..._suggestions.map((t) => _buildChip(t)),
+                                  ..._customSuggestions.map((t) => _buildChip(t)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 24),
+                    const SizedBox(width: 24),
 
-              // ── RIGHT: Chat + Input ────────────────────────────────
-              Expanded(
-                flex: 3,
-                child: Column(
-                  children: [
+                    // ── RIGHT: Chat + Input ────────────────────────────────
                     Expanded(
-                      flex: 5,
-                      child: GlassContainer(
-                        child: Column(
-                          children: [
-                            // Header
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                              child: Row(
+                      flex: 3,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: GlassContainer(
+                              child: Column(
                                 children: [
-                                  Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppTheme.accentGreen,
+                                  // Header
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 8,
+                                          height: 8,
+                                          decoration: const BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: AppTheme.accentGreen,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Text(
+                                          'Live Translation',
+                                          style: TextStyle(
+                                            fontFamily: 'Outfit',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.textPrimary,
+                                            letterSpacing: -0.3,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  const Text(
-                                    'Live Translation',
-                                    style: TextStyle(
-                                      fontFamily: 'Outfit',
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.textPrimary,
-                                      letterSpacing: -0.3,
+                                  const SizedBox(height: 12),
+                                  Divider(
+                                    color: AppTheme.borderDefault.withOpacity(0.6),
+                                    height: 1,
+                                    thickness: 1,
+                                  ),
+                                  // Messages
+                                  Expanded(
+                                    child: ListView.builder(
+                                      padding: const EdgeInsets.all(16),
+                                      itemCount: appState.messages.length,
+                                      itemBuilder: (context, index) {
+                                        final msg = appState.messages[index];
+                                        final isMe =
+                                            msg['sender'] == AppConstants.kSenderA;
+                                        return _buildChatBubble(
+                                          msg['text'] ?? '',
+                                          isMe,
+                                          index,
+                                          msg['sender'] ?? 'A',
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  // Text input
+                                  Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.bgSurface,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                            color: AppTheme.borderAmber, width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.2),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: TextField(
+                                        controller: _chatController,
+                                        style: const TextStyle(
+                                            color: AppTheme.textPrimary,
+                                            fontFamily: 'Outfit',
+                                            fontWeight: FontWeight.w500),
+                                        decoration: InputDecoration(
+                                          hintText: 'Type or speak...',
+                                          hintStyle: const TextStyle(
+                                              color: AppTheme.textMuted,
+                                              fontFamily: 'Outfit'),
+                                          fillColor: Colors.transparent,
+                                          filled: true,
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                            borderSide: BorderSide.none,
+                                          ),
+                                          prefixIcon: IconButton(
+                                            icon: Icon(
+                                              _isListening
+                                                  ? Icons.mic
+                                                  : Icons.mic_none,
+                                              color: _isListening
+                                                  ? AppTheme.accentGreen
+                                                  : AppTheme.textMuted,
+                                            ),
+                                            onPressed: _listen,
+                                          ),
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(Icons.send,
+                                                color: AppTheme.amber),
+                                            onPressed: () =>
+                                                _sendMessage(_chatController.text),
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Divider(
-                              color: AppTheme.borderDefault.withOpacity(0.6),
-                              height: 1,
-                              thickness: 1,
-                            ),
-                            // Messages
-                            Expanded(
-                              child: ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: appState.messages.length,
-                                itemBuilder: (context, index) {
-                                  final msg = appState.messages[index];
-                                  final isMe =
-                                      msg['sender'] == AppConstants.kSenderA;
-                                  return _buildChatBubble(
-                                    msg['text'] ?? '',
-                                    isMe,
-                                    index,
-                                    msg['sender'] ?? 'A',
-                                  );
-                                },
-                              ),
-                            ),
-                            // Text input
-                            Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: AppTheme.bgSurface,
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                      color: AppTheme.borderAmber, width: 1.5),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.2),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: TextField(
-                                  controller: _chatController,
-                                  style: const TextStyle(
-                                      color: AppTheme.textPrimary,
-                                      fontFamily: 'Outfit',
-                                      fontWeight: FontWeight.w500),
-                                  decoration: InputDecoration(
-                                    hintText: 'Type or speak...',
-                                    hintStyle: const TextStyle(
-                                        color: AppTheme.textMuted,
-                                        fontFamily: 'Outfit'),
-                                    fillColor: Colors.transparent,
-                                    filled: true,
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                    prefixIcon: IconButton(
-                                      icon: Icon(
-                                        _isListening
-                                            ? Icons.mic
-                                            : Icons.mic_none,
-                                        color: _isListening
-                                            ? AppTheme.accentGreen
-                                            : AppTheme.textMuted,
-                                      ),
-                                      onPressed: _listen,
-                                    ),
-                                    suffixIcon: IconButton(
-                                      icon: const Icon(Icons.send,
-                                          color: AppTheme.amber),
-                                      onPressed: () =>
-                                          _sendMessage(_chatController.text),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 16),
+                          if (!widget.isAdmin)
+                            _buildGuestBottomBar()
+                          else
+                            _buildAdminSettingsRow(),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    if (!widget.isAdmin)
-                      _buildGuestBottomBar()
-                    else
-                      _buildAdminSettingsRow(),
                   ],
                 ),
               ),
@@ -607,7 +652,7 @@ class _InputViewState extends State<InputView> {
                   const SizedBox(height: 20),
                   if (hasSign)
                     Text(
-                      lastAsl!['text'] ?? '',
+                      lastAsl?['text'] ?? '',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontFamily: 'ArchivoBlack',
@@ -927,43 +972,6 @@ class _InputViewState extends State<InputView> {
     );
   }
 
-  Widget _buildSmallChip(String text, {bool isAI = false, bool isFollowup = false}) {
-    final appState = context.read<AppState>();
-    final sender = appState.windowMode == 'customer_A_input'
-        ? AppConstants.kSenderA
-        : AppConstants.kSenderB;
-    return GestureDetector(
-      onTap: () {
-        if (isAI || isFollowup) {
-          appState.onSuggestionTapped(text, sender);
-        } else {
-          _sendMessage(text);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isAI
-              ? Colors.blueAccent.withOpacity(0.15)
-              : isFollowup
-                  ? Colors.greenAccent.withOpacity(0.1)
-                  : Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: isAI
-              ? Border.all(color: Colors.blueAccent.withOpacity(0.3))
-              : null,
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: isAI ? Colors.blueAccent : Colors.white,
-            fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-
   void _showSettingsDialog() {
     showDialog(
       context: context,
@@ -1149,7 +1157,8 @@ class _InputViewState extends State<InputView> {
                                   fillColor: Colors.transparent,
                                   filled: true,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(12)),
                                     borderSide: BorderSide.none,
                                   ),
                                 ),

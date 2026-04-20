@@ -138,7 +138,9 @@ class _AppInitializerState extends State<AppInitializer> {
                 const SizedBox(height: 28),
 
                 Text(
-                  'Connecting to server...',
+                  AppConstants.aslEngineHost != 'localhost'
+                      ? 'Cashier mode — connecting to ${AppConstants.aslEngineHost}'
+                      : 'Connecting to server...',
                   style: GoogleFonts.archivoBlack(
                     fontSize: 18,
                     color: AppTheme.textPrimary,

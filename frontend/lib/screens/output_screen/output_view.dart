@@ -88,6 +88,28 @@ class _OutputViewState extends State<OutputView> {
     ];
 
     return Scaffold(
+      // ── Session link FAB — orange=unlinked, green=linked ──
+      floatingActionButtonLocation: FloatingActionButtonLocation.endTop,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Consumer<AppState>(
+          builder: (ctx, state, _) {
+            final linked = state.linkedSessionId.isNotEmpty;
+            return FloatingActionButton.small(
+              heroTag: 'output_session_fab',
+              backgroundColor: linked
+                  ? Colors.greenAccent.withOpacity(0.85)
+                  : Colors.orangeAccent.withOpacity(0.85),
+              tooltip: linked ? 'Session Linked — tap to manage' : 'Connect to Customer Session',
+              onPressed: _showSessionDialog,
+              child: Icon(
+                linked ? Icons.link : Icons.link_off,
+                color: Colors.black87, size: 20,
+              ),
+            );
+          },
+        ),
+      ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: SafeArea(
@@ -518,43 +540,37 @@ class _OutputViewState extends State<OutputView> {
   }
 
   Widget _buildAdminSettingsRow(BuildContext context) {
-    return Container(
+    return SizedBox(
       height: 64,
-      decoration: BoxDecoration(
-        color: AppTheme.bgCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppTheme.borderAmber, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.settings, color: AppTheme.textSecondary),
-            onPressed: () => _showSettingsDialog(context),
-          ),
-          Container(width: 1, height: 28, color: AppTheme.borderDefault),
-          IconButton(
-            icon:
-                const Icon(Icons.swap_horiz, color: AppTheme.textSecondary),
-            onPressed: () => Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const InputView(isAdmin: true),
+      child: GlassContainer(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.settings, color: AppTheme.textSecondary),
+              onPressed: () => _showSettingsDialog(context),
+            ),
+            VerticalDivider(
+              color: AppTheme.borderDefault.withOpacity(0.5),
+              indent: 12,
+              endIndent: 12,
+            ),
+            IconButton(
+              icon: const Icon(Icons.swap_horiz, color: AppTheme.textSecondary),
+              onPressed: () => Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const InputView(isAdmin: true),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
+  // ── Session Connect Dialog ────────────────────────────────────
   void _showSessionDialog() {
     final appState = context.read<AppState>();
     _sessionController.text = appState.linkedSessionId;
@@ -580,6 +596,7 @@ class _OutputViewState extends State<OutputView> {
             content: SizedBox(
               width: 400,
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Show Device A's session ID
                 Container(
                   padding: const EdgeInsets.all(12),
                   width: double.infinity,

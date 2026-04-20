@@ -275,7 +275,7 @@ class AppState extends ChangeNotifier {
       currentSuggestions = List<String>.from([
         sentence,
         ...extraSuggestions.where((s) => s.trim().toLowerCase() != sentence.trim().toLowerCase()),
-      ].take(5));
+      ].take(5).toList());
     } catch (e) {
       // Keep the instant fallback chips already shown — don't wipe them
     }
