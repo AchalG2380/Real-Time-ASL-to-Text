@@ -44,7 +44,11 @@ class _InputViewState extends State<InputView> {
   final TextEditingController _sessionLinkController = TextEditingController();
   Timer? _sessionPromptTimer;
 
+<<<<<<< HEAD
   @override
+=======
+ @override
+>>>>>>> 1a3b0abd1de31dcce9b5d89a02d3f6dc24505f17
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
@@ -321,6 +325,7 @@ class _InputViewState extends State<InputView> {
           },
         ),
       ),
+<<<<<<< HEAD
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: Padding(
@@ -388,6 +393,75 @@ class _InputViewState extends State<InputView> {
                                 spacing: 8,
                                 runSpacing: 8,
                                 alignment: WrapAlignment.center,
+=======
+      body: Stack(
+        children: [
+          Container(color: const Color(0xFF16181A)),
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              children: [
+                // ── Session sync status banner (Device B live link indicator) ──
+                Consumer<AppState>(
+                  builder: (context, state, _) {
+                    final linked = state.linkedSessionId.isNotEmpty;
+                    if (!linked) return const SizedBox.shrink();
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8, height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.greenAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Live — Synced with Customer Device',
+                            style: TextStyle(color: Colors.greenAccent, fontSize: 12),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Polling every 3s',
+                            style: TextStyle(color: Colors.white24, fontSize: 10),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                // ── Main content row (left: camera, right: chat) ──
+                Expanded(
+                  child: Row(
+                    children: [
+                // LEFT SIDE — Camera and suggestion chips
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: GlassContainer(
+                          child: Consumer<AppState>(
+                            builder: (context, state, _) {
+                              final running  = state.aslEngineRunning;
+                              final status   = state.aslEngineStatus;
+                              final starting = status.contains('Starting') || status.contains('loading');
+                              final lastAsl  = state.messages.isNotEmpty ? state.messages.last : null;
+                              final hasSign  = lastAsl != null && lastAsl['sender'] == 'A';
+
+                              return Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+>>>>>>> 1a3b0abd1de31dcce9b5d89a02d3f6dc24505f17
                                 children: [
                                   ...appState.currentSuggestions
                                       .map((t) => _buildChip(t, isAI: true)),
@@ -532,10 +606,20 @@ class _InputViewState extends State<InputView> {
                     ),
                   ],
                 ),
+<<<<<<< HEAD
               ),
             ],
           ),
         ),
+=======
+              ],
+            ),         // close inner Row
+          ),           // close Expanded
+              ],
+            ),         // close Column
+          ),           // close Padding
+        ],
+>>>>>>> 1a3b0abd1de31dcce9b5d89a02d3f6dc24505f17
       ),
     );
   }
@@ -963,6 +1047,125 @@ class _InputViewState extends State<InputView> {
     );
   }
 
+<<<<<<< HEAD
+=======
+  Widget _buildSmallChip(String text, {bool isAI = false, bool isFollowup = false}) {
+    final appState = context.read<AppState>();
+    final sender = appState.windowMode == 'customer_A_input'
+        ? AppConstants.kSenderA
+        : AppConstants.kSenderB;
+    return GestureDetector(
+      onTap: () {
+        if (isAI || isFollowup) {
+          appState.onSuggestionTapped(text, sender);
+        } else {
+          _sendMessage(text);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isAI
+              ? Colors.blueAccent.withOpacity(0.15)
+              : isFollowup
+                  ? Colors.greenAccent.withOpacity(0.1)
+                  : Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: isAI
+              ? Border.all(color: Colors.blueAccent.withOpacity(0.3))
+              : null,
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isAI ? Colors.blueAccent : Colors.white,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatBubble(String text, bool isMe, int index, String sender) {
+    return GestureDetector(
+      onLongPress: () async {
+        // Long press to edit — only works before next message from same sender
+        final controller = TextEditingController(text: text);
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: const Color(0xFF16181A),
+            title: const Text('Edit message', style: TextStyle(color: Colors.white)),
+            content: TextField(
+              controller: controller,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  final appState = context.read<AppState>();
+                  final success = await appState.editMessage(index, controller.text, sender);
+                  if (!success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cannot edit — a newer message exists')),
+                    );
+                  }
+                },
+                child: const Text('Save', style: TextStyle(color: Colors.blueAccent)),
+              ),
+            ],
+          ),
+        );
+      },
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isMe
+                ? const Color(0xFF4A5C6D)
+                : Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment:
+                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              Text(text, style: const TextStyle(color: Colors.white, fontSize: 14)),
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => _speakText(text),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.volume_up, size: 12, color: Colors.white.withOpacity(0.5)),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Listen",
+                      style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+>>>>>>> 1a3b0abd1de31dcce9b5d89a02d3f6dc24505f17
   void _showSettingsDialog() {
     showDialog(
       context: context,
@@ -992,6 +1195,7 @@ class _InputViewState extends State<InputView> {
                       ),
                       const SizedBox(height: 24),
 
+<<<<<<< HEAD
                       // Portal switch
                       _settingsCard(
                         child: Row(
@@ -1010,6 +1214,182 @@ class _InputViewState extends State<InputView> {
                                         fontWeight: FontWeight.w700,
                                       )),
                                 ],
+=======
+                    // ── Session Sync (Two-Device Demo) ─────────────────
+                    Builder(builder: (ctx) {
+                      final appState = ctx.read<AppState>();
+                      final sessionController = TextEditingController(
+                        text: appState.linkedSessionId,
+                      );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Device A: show own session ID
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Your Session ID',
+                                style: TextStyle(color: Colors.white70, fontSize: 13)),
+                            subtitle: SelectableText(
+                              appState.sessionId.isEmpty ? 'Loading...' : appState.sessionId,
+                              style: const TextStyle(
+                                  color: Colors.amber, fontSize: 11, fontFamily: 'monospace'),
+                            ),
+                          ),
+                          // Device B: join another session
+                          const Text('Join Device A Session (Cashier)',
+                              style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          Row(children: [
+                            Expanded(
+                              child: TextField(
+                                controller: sessionController,
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                decoration: InputDecoration(
+                                  hintText: 'Paste Device A session ID...',
+                                  hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+                                  filled: true,
+                                  fillColor: Colors.white.withOpacity(0.05),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent.withOpacity(0.8),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              ),
+                              onPressed: () {
+                                final id = sessionController.text.trim();
+                                if (id.isNotEmpty) {
+                                  context.read<AppState>().joinSession(id);
+                                  Navigator.pop(context);
+                                }
+                              },
+                              child: const Text('Link', style: TextStyle(fontSize: 12)),
+                            ),
+                          ]),
+                          if (appState.linkedSessionId.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Row(children: [
+                                const Icon(Icons.link, color: Colors.greenAccent, size: 14),
+                                const SizedBox(width: 4),
+                                Expanded(child: Text(
+                                  'Linked to: ${appState.linkedSessionId}',
+                                  style: const TextStyle(color: Colors.greenAccent, fontSize: 11),
+                                  overflow: TextOverflow.ellipsis,
+                                )),
+                                TextButton(
+                                  onPressed: () {
+                                    context.read<AppState>().joinSession('');
+                                    setPopupState(() {});
+                                  },
+                                  child: const Text('Unlink', style: TextStyle(color: Colors.redAccent, fontSize: 11)),
+                                ),
+                              ]),
+                            ),
+                        ],
+                      );
+                    }),
+                    Divider(color: Colors.white.withOpacity(0.15)),
+
+                    // Online/Offline toggle
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        "AI Suggestions (Online Mode)",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        _isOnlineMode
+                            ? "Using AI API"
+                            : "Using Predefined Offline Data",
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 12),
+                      ),
+                      value: _isOnlineMode,
+                      activeColor: Colors.blueAccent,
+                      onChanged: (val) {
+                        setPopupState(() => _isOnlineMode = val);
+                        setState(() => _isOnlineMode = val);
+                        // Sync to backend
+                        final appState = context.read<AppState>();
+                        appState.saveAdminSettings(
+                          '',
+                          {'is_online': val},
+                        );
+                      },
+                    ),
+                    Divider(color: Colors.white.withOpacity(0.15)),
+
+                    // Store type dropdown
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        "Store Category",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      trailing: DropdownButton<String>(
+                        dropdownColor: const Color(0xFF2A2D32),
+                        value: _storeType,
+                        style: const TextStyle(color: Colors.white),
+                        items: ["Retail", "Bakery", "Cafe"].map((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setPopupState(() => _storeType = val);
+                            setState(() => _storeType = val);
+                          }
+                        },
+                      ),
+                    ),
+                    Divider(color: Colors.white.withOpacity(0.15)),
+
+                    // Custom suggestions section
+                    const Text(
+                      "Custom Suggestions",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Add your own suggestion chips to the sign screen.",
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Input row to add new custom suggestion
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _customSuggestionController,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: "e.g. Do you accept UPI?",
+                              hintStyle: const TextStyle(
+                                  color: Colors.white30, fontSize: 13),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.05),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide.none,
+>>>>>>> 1a3b0abd1de31dcce9b5d89a02d3f6dc24505f17
                               ),
                             ),
                             IconButton(
