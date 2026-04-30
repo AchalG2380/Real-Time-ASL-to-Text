@@ -49,9 +49,11 @@ from tensorflow.keras.layers import (
 # ─────────────────────────────────────────────────────────────
 # WebSocket Server — broadcasts detections to Flutter
 # ─────────────────────────────────────────────────────────────
-sign_queue       = Queue()
-ws_clients       = set()
+sign_queue        = Queue()
+frame_queue       = Queue(maxsize=1)   # latest camera frame as base64 JPEG
+ws_clients        = set()
 _stored_session_id = ""   # Device A registers its session; Device B gets it automatically
+_frame_counter    = 0     # used to throttle frame sends to ~10 fps
 
 async def _ws_handler(websocket):
     global ws_clients, _stored_session_id
@@ -70,13 +72,27 @@ async def _ws_handler(websocket):
             pass
 
     try:
-        # Handle incoming messages from Flutter (session registration etc.)
+        # Handle incoming messages from Flutter
         async for raw in websocket:
             try:
                 data = json.loads(raw)
                 if data.get("type") == "session_register":
                     _stored_session_id = data.get("session_id", "")
                     print(f"[WS] Session registered: {_stored_session_id}")
+                elif data.get("type") == "screen_switch":
+                    # Relay to all OTHER connected clients
+                    screen = data.get("screen", "")
+                    print(f"[WS] Relaying screen_switch: {screen}")
+                    relay_msg = json.dumps({"type": "screen_switch", "screen": screen})
+                    dead = set()
+                    for other in list(ws_clients):
+                        if other is websocket:
+                            continue
+                        try:
+                            await other.send(relay_msg)
+                        except Exception:
+                            dead.add(other)
+                    ws_clients -= dead
             except Exception:
                 pass
     finally:
@@ -85,15 +101,28 @@ async def _ws_handler(websocket):
 
 
 async def _broadcaster():
-    global ws_clients                   # ← required: ws_clients -= dead would make it local otherwise
+    global ws_clients  # ← required: ws_clients -= dead would make it local otherwise
     while True:
-        await asyncio.sleep(0.04)       # ~25 times/sec
+        await asyncio.sleep(0.04)   # ~25 times/sec
+
+        # ── Broadcast sign detections ──────────────────────────────
         while not sign_queue.empty():
             msg = sign_queue.get()
             dead = set()
-            for ws in list(ws_clients): # iterate a snapshot so mutation is safe
+            for ws in list(ws_clients):
                 try:
                     await ws.send(msg)
+                except Exception:
+                    dead.add(ws)
+            ws_clients -= dead
+
+        # ── Broadcast latest camera frame (10 fps throttle) ────────
+        if not frame_queue.empty():
+            frame_msg = frame_queue.get()   # get the most recent frame
+            dead = set()
+            for ws in list(ws_clients):
+                try:
+                    await ws.send(frame_msg)
                 except Exception:
                     dead.add(ws)
             ws_clients -= dead
@@ -120,6 +149,24 @@ def emit_sign(sign: str, confidence: float, source: str):
     msg = json.dumps({"sign": sign, "confidence": round(confidence, 3), "source": source})
     sign_queue.put(msg)
     print(f"[WS] Emitting -> {msg}")
+
+
+def emit_frame(bgr_frame):
+    """Encode a BGR OpenCV frame as JPEG base64 and push to frame_queue (non-blocking).
+    Only keeps the most recent frame — older ones are dropped if not yet consumed."""
+    import base64
+    ok, buf = cv2.imencode('.jpg', bgr_frame, [cv2.IMWRITE_JPEG_QUALITY, 55])
+    if not ok:
+        return
+    b64 = base64.b64encode(buf.tobytes()).decode('ascii')
+    msg = json.dumps({"type": "frame", "data": b64})
+    # Drop the old frame if the queue is full (always keep latest)
+    if frame_queue.full():
+        try:
+            frame_queue.get_nowait()
+        except Exception:
+            pass
+    frame_queue.put_nowait(msg)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -632,6 +679,13 @@ while cap.isOpened():
         cv2.rectangle(display, (0, 0), (CAM_W - 1, CAM_H - 1), border_col, 3)
 
     cv2.imshow("SignBridge  ASL Live", display)
+
+    # ── Stream frame to Flutter at ~10 fps (every 3rd frame @ 30 fps) ──
+    _frame_counter += 1
+    if _frame_counter % 3 == 0:
+        small = cv2.resize(display, (480, 270))
+        emit_frame(small)
+
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord('q'):

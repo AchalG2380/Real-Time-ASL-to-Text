@@ -4,3 +4,6 @@ numpy==1.26.4
 tensorflow-cpu
 mlflow>=2.13.0
 websockets
+fastapi
+uvicorn
+deep-translator

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -65,6 +66,26 @@ class _InputViewState extends State<InputView> {
         });
       }
     });
+  }
+
+  // Listen for remote screen switch commands from the other device
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = context.watch<AppState>();
+    if (appState.pendingScreenSwitch == 'output' && mounted) {
+      // Use addPostFrameCallback to avoid setState during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<AppState>().clearPendingScreenSwitch();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const OutputView(isAdmin: true),
+          ),
+        );
+      });
+    }
   }
 
   @override
@@ -549,6 +570,7 @@ class _InputViewState extends State<InputView> {
     final lastAsl =
         state.messages.isNotEmpty ? state.messages.last : null;
     final hasSign = lastAsl != null && lastAsl['sender'] == 'A';
+    final hasFrame = state.latestFrameBase64.isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -570,15 +592,39 @@ class _InputViewState extends State<InputView> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(26),
         child: Stack(
+          fit: StackFit.expand,
           children: [
+            // ── Live camera frame (when available) ───────────────
+            if (hasFrame)
+              Image.memory(
+                base64Decode(state.latestFrameBase64),
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppTheme.bgCard.withOpacity(0.4),
+                      AppTheme.bgSurface.withOpacity(0.25),
+                    ],
+                  ),
+                ),
+              ),
+
+            // ── Overlay: status + sign label ─────────────────────
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                   colors: [
-                    AppTheme.bgCard.withOpacity(0.4),
-                    AppTheme.bgSurface.withOpacity(0.25),
+                    Colors.black.withOpacity(hasFrame ? 0.55 : 0.0),
+                    Colors.black.withOpacity(hasFrame ? 0.75 : 0.0),
                   ],
                 ),
               ),
@@ -639,50 +685,71 @@ class _InputViewState extends State<InputView> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  Icon(
-                    Icons.back_hand_outlined,
-                    size: 56,
-                    color: running
-                        ? AppTheme.textPrimary.withOpacity(0.2)
-                        : AppTheme.textPrimary.withOpacity(0.08),
-                  ),
-                  const SizedBox(height: 20),
-                  if (hasSign)
-                    Text(
-                      lastAsl?['text'] ?? '',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.archivoBlack(
-                        color: AppTheme.textPrimary,
-                        fontSize: 28,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: -0.5,
-                      ),
-                    )
-                  else
-                    Text(
-                      running
-                          ? 'Show your hand to the camera...'
-                          : starting
-                              ? 'Loading models, please wait...'
-                              : 'Camera not running',
-                      style: GoogleFonts.outfit(
-                        color: running
-                            ? AppTheme.textMuted
-                            : AppTheme.textMuted.withOpacity(0.5),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      textAlign: TextAlign.center,
+                  if (!hasFrame) ...[
+                    const SizedBox(height: 24),
+                    Icon(
+                      Icons.back_hand_outlined,
+                      size: 56,
+                      color: running
+                          ? AppTheme.textPrimary.withOpacity(0.2)
+                          : AppTheme.textPrimary.withOpacity(0.08),
                     ),
-                  if (!running && !starting) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      status,
-                      style: TextStyle(
-                          color: AppTheme.textMuted.withOpacity(0.4),
-                          fontSize: 10),
-                      textAlign: TextAlign.center,
+                    const SizedBox(height: 20),
+                    if (hasSign)
+                      Text(
+                        lastAsl['text'] ?? '',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.archivoBlack(
+                          color: AppTheme.textPrimary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: -0.5,
+                        ),
+                      )
+                    else
+                      Text(
+                        running
+                            ? 'Show your hand to the camera...'
+                            : starting
+                                ? 'Loading models, please wait...'
+                                : 'Camera not running',
+                        style: GoogleFonts.outfit(
+                          color: running
+                              ? AppTheme.textMuted
+                              : AppTheme.textMuted.withOpacity(0.5),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    if (!running && !starting) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        status,
+                        style: TextStyle(
+                            color: AppTheme.textMuted.withOpacity(0.4),
+                            fontSize: 10),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ] else if (hasSign) ...[
+                    // When live frame is shown, display sign label at bottom
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        lastAsl['text'] ?? '',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.archivoBlack(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
                     ),
                   ],
                 ],
@@ -950,12 +1017,15 @@ class _InputViewState extends State<InputView> {
             Container(width: 1, height: 28, color: AppTheme.borderDefault),
             IconButton(
               icon: const Icon(Icons.swap_horiz, color: AppTheme.textSecondary),
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const OutputView(isAdmin: true),
-                ),
-              ),
+              onPressed: () {
+                context.read<AppState>().socketService.sendScreenSwitch('output');
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const OutputView(isAdmin: true),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -1052,13 +1122,16 @@ class _InputViewState extends State<InputView> {
                             IconButton(
                               icon: const Icon(Icons.swap_horiz,
                                   color: AppTheme.textSecondary),
-                              onPressed: () => Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const OutputView(isAdmin: true),
-                                ),
-                              ),
+                              onPressed: () {
+                                context.read<AppState>().socketService.sendScreenSwitch('output');
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const OutputView(isAdmin: true),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),

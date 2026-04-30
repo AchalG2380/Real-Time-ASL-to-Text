@@ -28,10 +28,24 @@ class AppState extends ChangeNotifier {
   // ── LANGUAGE ─────────────────────────────────────────────────
   String currentLanguage = 'en';
 
+  // ── TRANSLATION CACHE (per-device, not shared) ───────────────
+  // Maps originalText → translatedText for the current language.
+  // Cleared whenever the language changes.
+  final Map<String, String> _translationCache = {};
+
   // ── SUGGESTIONS ──────────────────────────────────────────────
   List<String> currentSuggestions = [];
   List<String> followupSuggestions = [];
   bool loadingSuggestions = false;
+
+  // ── CAMERA FRAME ─────────────────────────────────────────────
+  /// Latest camera frame from combined_asl_live.py as base64 JPEG.
+  String latestFrameBase64 = '';
+
+  // ── SCREEN SWITCH ─────────────────────────────────────────────
+  /// Set by Python relay when the other device switches view.
+  /// Values: '' | 'input' | 'output'
+  String pendingScreenSwitch = '';
 
   // ── ML SOCKET ────────────────────────────────────────────────
   final SocketService socketService = SocketService();
@@ -42,13 +56,10 @@ class AppState extends ChangeNotifier {
   String get aslEngineStatus => processService.statusMessage;
 
   // ── DEBOUNCE FILTER ───────────────────────────────────────────
-  // A sign must arrive ≥2 times within 1.2 s to be confirmed.
-  // This suppresses single-frame transitional detections.
   String? _pendingSign;
   int _pendingCount = 0;
   Timer? _debounceTimer;
   static const int _minSignCount = 2;
-  static const int _debouncMs = 1200;
 
   // ── POLLING (Device B / cashier sync) ────────────────────────
   Timer? _pollTimer;
@@ -67,7 +78,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     // ── 1. Launch the Python ASL engine (Device A only) ────────────
-    // On Device B (cashier) the engine isn't available — skip silently.
     if (windowMode == 'customer_A_input' || AppConstants.aslEngineHost == 'localhost') {
       processService.onStatusChange = notifyListeners;
       processService.startAslEngine();
@@ -105,9 +115,21 @@ class AppState extends ChangeNotifier {
       }
     };
 
+    // Camera frame relay: store latest base64 JPEG and notify UI
+    socketService.onFrame = (String b64) {
+      latestFrameBase64 = b64;
+      notifyListeners();
+    };
+
+    // Screen switch relay: notify views to navigate
+    socketService.onScreenSwitch = (String screen) {
+      pendingScreenSwitch = screen;
+      notifyListeners();
+    };
+
     socketService.connect(
       (sign, confidence, source) => _onSignReceived(sign, confidence, source),
-      mySessionId: sessionId, // Device A registers this; Device B ignores it
+      mySessionId: sessionId,
     );
 
     // ── 5. Start polling for new messages (Device B / cashier real-time sync)
@@ -115,6 +137,11 @@ class AppState extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  /// Clear the pending screen switch after the view has handled it.
+  void clearPendingScreenSwitch() {
+    pendingScreenSwitch = '';
   }
 
   @override
@@ -133,8 +160,8 @@ class AppState extends ChangeNotifier {
   void _onSignReceived(String sign, double confidence, String source) {
     final sender = windowMode == 'customer_A_input' ? 'A' : 'B';
 
-    // ── Word model signs are already confirmed by Python's own
-    //    consecutive-frame logic → pass through immediately.
+    // Word model signs are already confirmed by Python's own
+    // consecutive-frame logic → pass through immediately.
     if (source == 'word_model') {
       _pendingSign = null;
       _pendingCount = 0;
@@ -143,9 +170,7 @@ class AppState extends ChangeNotifier {
       return;
     }
 
-    // ── Alphabet model: require _minSignCount consecutive same letter.
-    //    Use count-based (not timer-based) so continuous signing doesn't
-    //    perpetually reset and block delivery.
+    // Alphabet model: require _minSignCount consecutive same letter.
     if (sign != _pendingSign) {
       _pendingSign = sign;
       _pendingCount = 1;
@@ -171,13 +196,32 @@ class AppState extends ChangeNotifier {
         final result = await ApiService.getMessages(activeSessionId);
         final rawList = result['messages'] as List? ?? [];
         final remote = rawList.map((m) {
-          // Backend may return 'sender'/'text' or 'role'/'content' — handle both
           final sender = (m['sender'] ?? m['role'] ?? 'A') as String;
           final text   = (m['text']   ?? m['content'] ?? '') as String;
           return <String, String>{'sender': sender, 'text': text, 'originalText': text};
         }).toList();
-        // Only update if something new arrived
         if (remote.length != messages.length) {
+          // ── Apply per-device translation from local cache ─────────
+          // This ensures polling NEVER wipes this device's chosen language.
+          if (currentLanguage != 'en') {
+            for (final msg in remote) {
+              final orig = msg['originalText']!;
+              if (_translationCache.containsKey(orig)) {
+                // Already translated — reuse cached result instantly
+                msg['text'] = _translationCache[orig]!;
+              } else {
+                // New message — translate and cache it
+                try {
+                  final res = await ApiService.translate(orig, currentLanguage);
+                  final translated = res['translated'] ?? orig;
+                  _translationCache[orig] = translated;
+                  msg['text'] = translated;
+                } catch (_) {
+                  msg['text'] = orig; // fallback to original
+                }
+              }
+            }
+          }
           messages = remote;
           notifyListeners();
         }
@@ -215,10 +259,12 @@ class AppState extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────
 
   Future<void> addMessage(String sender, String text) async {
-    messages.add({'sender': sender, 'text': text, 'originalText': text});
+    final displayText = currentLanguage != 'en'
+        ? (await ApiService.translate(text, currentLanguage))['translated'] ?? text
+        : text;
+    messages.add({'sender': sender, 'text': displayText, 'originalText': text});
     notifyListeners();
 
-    // Use activeSessionId so Device B's replies go to Device A's shared session
     final sid = activeSessionId;
     if (sid.isNotEmpty) {
       await ApiService.sendMessage(sid, sender, text);
@@ -244,7 +290,7 @@ class AppState extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SIGN HANDLING — called by Person 4's bridge
+  // SIGN HANDLING
   // ─────────────────────────────────────────────────────────────
 
   Future<void> handleIncomingSign(String sign, String screen) async {
@@ -277,37 +323,12 @@ class AppState extends ChangeNotifier {
         ...extraSuggestions.where((s) => s.trim().toLowerCase() != sentence.trim().toLowerCase()),
       ].take(5).toList());
     } catch (e) {
-      // Keep the instant fallback chips already shown — don't wipe them
+      // Keep the instant fallback chips already shown
     }
 
-    loadingSuggestions = false;
-    notifyListeners();
-    // NOTE: addMessage() is NOT called here.
-    // The user taps a suggestion chip to send to chat.
-  }
-
-  Future<void> _loadSuggestions(String sign, String screen) async {
-    loadingSuggestions = true;
-    currentSuggestions = [];
-    followupSuggestions = [];
-    notifyListeners();
-
-    if (isOnline) {
-      final template = await ApiService.getTemplateSuggestions(sign, screen);
-      if (template['matched'] == true) {
-        currentSuggestions = List<String>.from(template['suggestions'] ?? []);
-      } else {
-        final smart = await ApiService.getSmartSuggestions(
-          sign,
-          _getRecentHistory(),
-          screen,
-          storeType,
-        );
-        currentSuggestions = List<String>.from(smart['suggestions'] ?? []);
-      }
-    } else {
-      final pre = await ApiService.getPredefinedSuggestions(storeType, screen);
-      currentSuggestions = List<String>.from(pre['suggestions'] ?? []);
+    // ── If a non-English language is active, translate the suggestions ──
+    if (currentLanguage != 'en') {
+      currentSuggestions = await _translateList(currentSuggestions, currentLanguage);
     }
 
     loadingSuggestions = false;
@@ -326,6 +347,11 @@ class AppState extends ChangeNotifier {
         storeType,
       );
       followupSuggestions = List<String>.from(followup['suggestions'] ?? []);
+
+      // Translate followup suggestions if needed
+      if (currentLanguage != 'en' && followupSuggestions.isNotEmpty) {
+        followupSuggestions = await _translateList(followupSuggestions, currentLanguage);
+      }
       notifyListeners();
     }
   }
@@ -337,18 +363,32 @@ class AppState extends ChangeNotifier {
   Future<void> switchLanguage(String langCode) async {
     if (langCode == currentLanguage) return;
     currentLanguage = langCode;
+    // Clear the cache — it was built for the previous language
+    _translationCache.clear();
 
     if (langCode == 'en') {
+      // Restore originals on this device only
       for (var msg in messages) {
         msg['text'] = msg['originalText'] ?? msg['text']!;
       }
+      currentSuggestions = List<String>.from(currentSuggestions);
+      followupSuggestions = List<String>.from(followupSuggestions);
     } else {
+      // Translate messages and populate the cache
       for (var msg in messages) {
-        final result = await ApiService.translate(
-          msg['originalText'] ?? msg['text']!,
-          langCode,
-        );
-        msg['text'] = result['translated'] ?? msg['text']!;
+        final orig = msg['originalText'] ?? msg['text']!;
+        final result = await ApiService.translate(orig, langCode);
+        final translated = result['translated'] ?? orig;
+        _translationCache[orig] = translated;
+        msg['text'] = translated;
+      }
+      // Translate current suggestions
+      if (currentSuggestions.isNotEmpty) {
+        currentSuggestions = await _translateList(currentSuggestions, langCode);
+      }
+      // Translate followup suggestions
+      if (followupSuggestions.isNotEmpty) {
+        followupSuggestions = await _translateList(followupSuggestions, langCode);
       }
     }
     notifyListeners();
@@ -400,5 +440,27 @@ class AppState extends ChangeNotifier {
           },
         )
         .toList();
+  }
+
+  /// Translate a list of strings to [langCode].
+  /// Populates [_translationCache]. Falls back to originals on error.
+  Future<List<String>> _translateList(List<String> items, String langCode) async {
+    final translated = <String>[];
+    for (final item in items) {
+      // Use cache if available
+      if (_translationCache.containsKey(item)) {
+        translated.add(_translationCache[item]!);
+        continue;
+      }
+      try {
+        final res = await ApiService.translate(item, langCode);
+        final t = res['translated'] ?? item;
+        _translationCache[item] = t;
+        translated.add(t);
+      } catch (_) {
+        translated.add(item);
+      }
+    }
+    return translated;
   }
 }

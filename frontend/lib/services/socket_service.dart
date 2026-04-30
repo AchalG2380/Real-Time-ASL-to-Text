@@ -28,6 +28,12 @@ class SocketService {
   // Called when Python relays Device A's session ID (Device B auto-join)
   void Function(String sessionId)? onSessionInfo;
 
+  // Called when a new camera frame arrives as base64 JPEG string
+  void Function(String base64Jpeg)? onFrame;
+
+  // Called when Python relays a screen_switch command from the other device
+  void Function(String screen)? onScreenSwitch;
+
   // Device A provides its session ID to register with the Python server
   String? _mySessionId;
 
@@ -83,7 +89,26 @@ class SocketService {
     try {
       final data = jsonDecode(raw as String) as Map<String, dynamic>;
 
-      // Session relay message from Python (Device B receives this)
+      // ── Camera frame (base64 JPEG) from Python ─────────────────
+      if (data['type'] == 'frame') {
+        final b64 = data['data'] as String? ?? '';
+        if (b64.isNotEmpty && onFrame != null) {
+          onFrame!(b64);
+        }
+        return;
+      }
+
+      // ── Screen switch relay from Python ─────────────────────────
+      if (data['type'] == 'screen_switch') {
+        final screen = data['screen'] as String? ?? '';
+        if (screen.isNotEmpty && onScreenSwitch != null) {
+          print('[SocketService] screen_switch received: $screen');
+          onScreenSwitch!(screen);
+        }
+        return;
+      }
+
+      // ── Session relay message from Python (Device B receives this) ──
       if (data['type'] == 'session_info') {
         final sid = data['session_id'] as String? ?? '';
         if (sid.isNotEmpty && onSessionInfo != null) {
@@ -93,7 +118,7 @@ class SocketService {
         return;
       }
 
-      // Normal sign detection message
+      // ── Normal sign detection message ───────────────────────────
       final sign       = data['sign']       as String? ?? '';
       final confidence = (data['confidence'] as num?)?.toDouble() ?? 0.0;
       final source     = data['source']     as String? ?? '';
@@ -103,6 +128,17 @@ class SocketService {
       }
     } catch (e) {
       print('[SocketService] Failed to parse message: $e  raw=$raw');
+    }
+  }
+
+  /// Send a screen switch command — Python will relay it to all other clients.
+  /// [screen] should be "input" or "output".
+  void sendScreenSwitch(String screen) {
+    try {
+      _channel?.sink.add(jsonEncode({'type': 'screen_switch', 'screen': screen}));
+      print('[SocketService] Sent screen_switch: $screen');
+    } catch (e) {
+      print('[SocketService] sendScreenSwitch error: $e');
     }
   }
 

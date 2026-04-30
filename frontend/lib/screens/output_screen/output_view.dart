@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -43,6 +44,25 @@ class _OutputViewState extends State<OutputView> {
         });
       }
     });
+  }
+
+  // Listen for remote screen switch commands from the other device
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appState = context.watch<AppState>();
+    if (appState.pendingScreenSwitch == 'input' && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<AppState>().clearPendingScreenSwitch();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const InputView(isAdmin: true),
+          ),
+        );
+      });
+    }
   }
 
   // Settings state
@@ -347,73 +367,97 @@ class _OutputViewState extends State<OutputView> {
                   flex: 3,
                   child: Column(
                     children: [
-                      // Camera mirror card
+                      // Camera mirror card — shows live feed if available
                       Expanded(
                         flex: 3,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppTheme.bgSurface.withOpacity(0.55),
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: AppTheme.borderDefault.withOpacity(0.9),
-                              width: 5,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 24,
-                                offset: const Offset(0, 8),
+                        child: Consumer<AppState>(
+                          builder: (ctx, appState, _) {
+                            final hasFrame = appState.latestFrameBase64.isNotEmpty;
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: AppTheme.bgSurface.withOpacity(0.55),
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: AppTheme.borderDefault.withOpacity(0.9),
+                                  width: 5,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(23),
-                            child: Stack(
-                              children: [
-                                Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(Icons.videocam_off_outlined,
-                                          size: 32,
-                                          color: AppTheme.textMuted
-                                              .withOpacity(0.3)),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Camera Mirror',
-                                        style: GoogleFonts.outfit(
-                                          color: AppTheme.textMuted
-                                              .withOpacity(0.5),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(23),
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    // Live frame or placeholder
+                                    if (hasFrame)
+                                      Image.memory(
+                                        base64Decode(appState.latestFrameBase64),
+                                        fit: BoxFit.cover,
+                                        gaplessPlayback: true,
+                                        errorBuilder: (_, __, ___) =>
+                                            const SizedBox.shrink(),
+                                      )
+                                    else
+                                      Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.videocam_off_outlined,
+                                              size: 32,
+                                              color: AppTheme.textMuted
+                                                  .withOpacity(0.3),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Camera Mirror',
+                                              style: GoogleFonts.outfit(
+                                                color: AppTheme.textMuted
+                                                    .withOpacity(0.5),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 14,
-                                  right: 14,
-                                  child: Container(
-                                    width: 10,
-                                    height: 10,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color:
-                                          Colors.redAccent.withOpacity(0.7),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.redAccent
-                                              .withOpacity(0.4),
-                                          blurRadius: 6,
+                                    // REC dot — green when live, red when no stream
+                                    Positioned(
+                                      top: 14,
+                                      right: 14,
+                                      child: Container(
+                                        width: 10,
+                                        height: 10,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: hasFrame
+                                              ? Colors.greenAccent
+                                              : Colors.redAccent
+                                                  .withOpacity(0.7),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: (hasFrame
+                                                      ? Colors.greenAccent
+                                                      : Colors.redAccent)
+                                                  .withOpacity(0.4),
+                                              blurRadius: 6,
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -571,12 +615,15 @@ class _OutputViewState extends State<OutputView> {
             IconButton(
               icon: const Icon(Icons.swap_horiz,
                   color: AppTheme.textSecondary),
-              onPressed: () => Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const InputView(isAdmin: true),
-                ),
-              ),
+              onPressed: () {
+                context.read<AppState>().socketService.sendScreenSwitch('input');
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const InputView(isAdmin: true),
+                  ),
+                );
+              },
             ),
           ],
         ),
