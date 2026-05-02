@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import '../../core/constants.dart';
 import '../../core/theme.dart';
 import '../../services/app_state.dart';
 import '../../services/api_service.dart';
+import '../../services/camera_service.dart';
 import 'widgets/glass_container.dart';
 import '../output_screen/output_view.dart';
 import 'widgets/inventory_panel.dart';
@@ -594,8 +596,14 @@ class _InputViewState extends State<InputView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ── Live camera frame (when available) ───────────────
-            if (hasFrame)
+            // ── Live camera frame ─────────────────────────────────
+            // Web:    HtmlElementView shows the live <video> element
+            // Native: base64 JPEG streamed from Python via WebSocket
+            if (kIsWeb && state.aslEngineRunning)
+              HtmlElementView(
+                viewType: CameraService.videoViewId,
+              )
+            else if (!kIsWeb && hasFrame)
               Image.memory(
                 base64Decode(state.latestFrameBase64),
                 fit: BoxFit.cover,

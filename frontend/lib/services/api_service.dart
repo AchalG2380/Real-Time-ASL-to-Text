@@ -6,6 +6,46 @@ import '../core/constants.dart';
 class ApiService {
   static const String baseUrl = AppConstants.localApiBaseUrl;
 
+  // ── WEB CAMERA / PREDICTION ──────────────────────────────────
+
+  /// Send a single JPEG frame to the backend.
+  /// Returns letter prediction AND 84-feature keypoints for the word buffer.
+  static Future<Map<String, dynamic>> predictFrame(Uint8List jpegBytes) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/predict/frame'),
+      );
+      request.files.add(
+        http.MultipartFile.fromBytes('file', jpegBytes, filename: 'frame.jpg'),
+      );
+      final streamed = await request.send().timeout(const Duration(seconds: 5));
+      final res = await http.Response.fromStream(streamed);
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (e) {
+      return {'letter': '', 'confidence': 0.0, 'detected': false, 'keypoints': <double>[]};
+    }
+  }
+
+  /// Send a 40-frame keypoint sequence for word detection.
+  /// [sequence] is a list of 40 lists, each containing 84 doubles.
+  static Future<Map<String, dynamic>> predictWordSequence(
+    List<List<double>> sequence,
+  ) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$baseUrl/predict/word'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'sequence': sequence}),
+          )
+          .timeout(const Duration(seconds: 8));
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (e) {
+      return {'word': '', 'confidence': 0.0, 'detected': false};
+    }
+  }
+
   // ── SETTINGS ─────────────────────────────────────────────────
 
   static Future<Map<String, dynamic>> getPublicSettings() async {

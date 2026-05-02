@@ -1,19 +1,22 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../core/constants.dart';
 import 'api_service.dart';
 import 'socket_service.dart';
 import 'process_service.dart';
+import 'camera_service.dart';
 
 class AppState extends ChangeNotifier {
-  // ── SETTINGS ─────────────────────────────────────────────────
+  // SETTINGS
   bool isOnline = false;
   String storeType = 'default';
   String windowMode = 'customer_A_input';
   bool isLoading = true;
   String errorMessage = '';
 
-  // ── SESSION ──────────────────────────────────────────────────
+  // SESSION
   String sessionId = '';
   /// Device B sets this to Device A's session ID to receive their messages.
   String linkedSessionId = '';
@@ -21,69 +24,97 @@ class AppState extends ChangeNotifier {
   String get activeSessionId => linkedSessionId.isNotEmpty ? linkedSessionId : sessionId;
   String greeting = 'Hi! Please sign or type what you would like to say.';
 
-  // ── MESSAGES ─────────────────────────────────────────────────
+  // MESSAGES
   // Each entry: {'sender': 'A'/'B', 'text': '...', 'originalText': '...'}
   List<Map<String, String>> messages = [];
 
-  // ── LANGUAGE ─────────────────────────────────────────────────
+  // LANGUAGE
   String currentLanguage = 'en';
 
-  // ── TRANSLATION CACHE (per-device, not shared) ───────────────
-  // Maps originalText → translatedText for the current language.
+  // TRANSLATION CACHE (per-device, not shared)
+  // Maps originalText -> translatedText for the current language.
   // Cleared whenever the language changes.
   final Map<String, String> _translationCache = {};
 
-  // ── SUGGESTIONS ──────────────────────────────────────────────
+  // SUGGESTIONS
   List<String> currentSuggestions = [];
   List<String> followupSuggestions = [];
   bool loadingSuggestions = false;
 
-  // ── CAMERA FRAME ─────────────────────────────────────────────
-  /// Latest camera frame from combined_asl_live.py as base64 JPEG.
+  // CAMERA FRAME
+  /// Latest camera frame from combined_asl_live.py as base64 JPEG (native only).
   String latestFrameBase64 = '';
 
-  // ── SCREEN SWITCH ─────────────────────────────────────────────
+  // SCREEN SWITCH
   /// Set by Python relay when the other device switches view.
   /// Values: '' | 'input' | 'output'
   String pendingScreenSwitch = '';
 
-  // ── ML SOCKET ────────────────────────────────────────────────
+  // ML SOCKET (native only)
   final SocketService socketService = SocketService();
 
-  // ── ASL ENGINE PROCESS ───────────────────────────────────────
+  // ASL ENGINE PROCESS (native) / Web camera (web)
   final ProcessService processService = ProcessService();
-  bool get aslEngineRunning => processService.isRunning;
-  String get aslEngineStatus => processService.statusMessage;
+  bool get aslEngineRunning => kIsWeb ? _webCameraRunning : processService.isRunning;
+  String get aslEngineStatus => kIsWeb ? _webCameraStatus : processService.statusMessage;
 
-  // ── DEBOUNCE FILTER ───────────────────────────────────────────
+  // WEB CAMERA SERVICE
+  final CameraService webCameraService = CameraService();
+  bool   _webCameraRunning = false;
+  String _webCameraStatus  = 'Camera not started';
+
+  // Rolling 40-frame keypoint buffer for word detection (web only)
+  final List<List<double>> _wordKpBuffer = [];
+  static const int _wordBufferSize = 40;
+  int _wordPredictCooldown = 0;
+  static const int _wordPredictCooldownFrames = 20;
+
+  // DEBOUNCE FILTER
   String? _pendingSign;
   int _pendingCount = 0;
   Timer? _debounceTimer;
   static const int _minSignCount = 2;
 
-  // ── POLLING (Device B / cashier sync) ────────────────────────
+  // POLLING (Device B / cashier sync)
   Timer? _pollTimer;
 
-  // ── ADMIN ─────────────────────────────────────────────────────
+  // ADMIN
   String adminToken = '';
   bool isAdminLoggedIn = false;
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // STARTUP
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   Future<void> initialize() async {
     isLoading = true;
     errorMessage = '';
     notifyListeners();
 
-    // ── 1. Launch the Python ASL engine (Device A only) ────────────
-    if (windowMode == 'customer_A_input' || AppConstants.aslEngineHost == 'localhost') {
-      processService.onStatusChange = notifyListeners;
-      processService.startAslEngine();
+    // 1. Start ASL engine
+    //    Web:    use browser camera + REST API pipeline
+    //    Native: launch combined_asl_live.py subprocess (Device A only)
+    if (kIsWeb) {
+      _webCameraStatus = 'Starting camera...';
+      notifyListeners();
+      webCameraService.onFrame = _onWebFrame;
+      webCameraService.onError = (err) {
+        _webCameraStatus  = err;
+        _webCameraRunning = false;
+        notifyListeners();
+      };
+      await webCameraService.start();
+      _webCameraRunning = webCameraService.isRunning;
+      _webCameraStatus  = _webCameraRunning ? 'ASL Engine Live' : 'Camera failed';
+      notifyListeners();
+    } else {
+      if (windowMode == 'customer_A_input' || AppConstants.aslEngineHost == 'localhost') {
+        processService.onStatusChange = notifyListeners;
+        processService.startAslEngine();
+      }
     }
 
-    // ── 2. Fetch backend settings ─────────────────────────────────
+    // 2. Fetch backend settings
     try {
       final settings = await ApiService.getPublicSettings();
       isOnline = settings['is_online'] ?? false;
@@ -94,7 +125,7 @@ class AppState extends ChangeNotifier {
       isOnline = false;
     }
 
-    // ── 3. Start chat session ─────────────────────────────────────
+    // 3. Start chat session
     try {
       final session = await ApiService.startSession();
       sessionId = session['session_id'] ?? '';
@@ -103,36 +134,39 @@ class AppState extends ChangeNotifier {
       errorMessage = 'Could not start session. Please restart the app.';
     }
 
-    // ── 4. Connect WebSocket (give Python ~3 s to start its WS server)
-    await Future.delayed(const Duration(seconds: 3));
-    socketService.setHost(AppConstants.aslEngineHost);
+    // 4. Connect WebSocket (native only — Python WS server on port 8765)
+    //    On web: no local Python, so skip the WebSocket entirely.
+    if (!kIsWeb) {
+      await Future.delayed(const Duration(seconds: 3));
+      socketService.setHost(AppConstants.aslEngineHost);
 
-    // Device B: auto-join Device A's session when Python relays it
-    socketService.onSessionInfo = (String remoteSessionId) {
-      if (linkedSessionId != remoteSessionId) {
-        joinSession(remoteSessionId);
-        print('[AppState] Auto-joined session from Device A: $remoteSessionId');
-      }
-    };
+      // Device B: auto-join Device A's session when Python relays it
+      socketService.onSessionInfo = (String remoteSessionId) {
+        if (linkedSessionId != remoteSessionId) {
+          joinSession(remoteSessionId);
+          print('[AppState] Auto-joined session from Device A: $remoteSessionId');
+        }
+      };
 
-    // Camera frame relay: store latest base64 JPEG and notify UI
-    socketService.onFrame = (String b64) {
-      latestFrameBase64 = b64;
-      notifyListeners();
-    };
+      // Camera frame relay: store latest base64 JPEG and notify UI
+      socketService.onFrame = (String b64) {
+        latestFrameBase64 = b64;
+        notifyListeners();
+      };
 
-    // Screen switch relay: notify views to navigate
-    socketService.onScreenSwitch = (String screen) {
-      pendingScreenSwitch = screen;
-      notifyListeners();
-    };
+      // Screen switch relay: notify views to navigate
+      socketService.onScreenSwitch = (String screen) {
+        pendingScreenSwitch = screen;
+        notifyListeners();
+      };
 
-    socketService.connect(
-      (sign, confidence, source) => _onSignReceived(sign, confidence, source),
-      mySessionId: sessionId,
-    );
+      socketService.connect(
+        (sign, confidence, source) => _onSignReceived(sign, confidence, source),
+        mySessionId: sessionId,
+      );
+    }
 
-    // ── 5. Start polling for new messages (Device B / cashier real-time sync)
+    // 5. Start polling for new messages (Device B / cashier real-time sync)
     _startPolling();
 
     isLoading = false;
@@ -150,18 +184,84 @@ class AppState extends ChangeNotifier {
     _pollTimer?.cancel();
     socketService.disconnect();
     processService.stop();
+    webCameraService.dispose();
     super.dispose();
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
+  // WEB CAMERA FRAME HANDLER
+  // -----------------------------------------------------------------------
+
+  /// Called by [CameraService] each time a new JPEG frame is ready.
+  /// 1. POSTs the frame to /predict/frame  ->  letter + keypoints
+  /// 2. Accumulates keypoints in a rolling buffer
+  /// 3. Every [_wordBufferSize] frames  ->  sends sequence to /predict/word
+  Future<void> _onWebFrame(Uint8List jpegBytes) async {
+    try {
+      final result   = await ApiService.predictFrame(jpegBytes);
+      final detected = result['detected'] as bool? ?? false;
+
+      // Letter detection
+      if (detected) {
+        final letter     = result['letter']     as String? ?? '';
+        final confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
+        if (letter.isNotEmpty && confidence >= 0.72) {
+          _onSignReceived(letter, confidence, 'alphabet_model');
+        }
+      }
+
+      // Word detection (sequence buffer)
+      final rawKp = result['keypoints'] as List? ?? [];
+      if (rawKp.isNotEmpty) {
+        final kp = rawKp.map((v) => (v as num).toDouble()).toList();
+        _wordKpBuffer.add(kp);
+        if (_wordKpBuffer.length > _wordBufferSize) {
+          _wordKpBuffer.removeAt(0);
+        }
+
+        if (_wordPredictCooldown > 0) {
+          _wordPredictCooldown--;
+        } else if (_wordKpBuffer.length == _wordBufferSize) {
+          _predictWordSequence();  // fire-and-forget
+          _wordPredictCooldown = _wordPredictCooldownFrames;
+        }
+      } else {
+        // Hand not detected — clear stale frames
+        if (_wordKpBuffer.length > _wordBufferSize ~/ 2) {
+          _wordKpBuffer.clear();
+        }
+      }
+    } catch (_) {
+      // Silently ignore network errors
+    }
+  }
+
+  Future<void> _predictWordSequence() async {
+    if (_wordKpBuffer.length < _wordBufferSize) return;
+    final snapshot = List<List<double>>.from(_wordKpBuffer);
+    try {
+      final result   = await ApiService.predictWordSequence(snapshot);
+      final detected = result['detected'] as bool? ?? false;
+      if (detected) {
+        final word       = result['word']       as String? ?? '';
+        final confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
+        if (word.isNotEmpty) {
+          _onSignReceived(word, confidence, 'word_model');
+          _wordKpBuffer.clear();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // -----------------------------------------------------------------------
   // DEBOUNCE FILTER
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   void _onSignReceived(String sign, double confidence, String source) {
     final sender = windowMode == 'customer_A_input' ? 'A' : 'B';
 
-    // Word model signs are already confirmed by Python's own
-    // consecutive-frame logic → pass through immediately.
+    // Word model signs are already confirmed by consecutive-frame logic
+    // (Python side on native, word buffer on web) -> pass through immediately.
     if (source == 'word_model') {
       _pendingSign = null;
       _pendingCount = 0;
@@ -184,9 +284,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // POLLING — keeps Device B (cashier) in sync with Device A
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
+  // POLLING (keeps Device B/cashier in sync with Device A)
+  // -----------------------------------------------------------------------
 
   void _startPolling() {
     _pollTimer?.cancel();
@@ -201,23 +301,19 @@ class AppState extends ChangeNotifier {
           return <String, String>{'sender': sender, 'text': text, 'originalText': text};
         }).toList();
         if (remote.length != messages.length) {
-          // ── Apply per-device translation from local cache ─────────
-          // This ensures polling NEVER wipes this device's chosen language.
           if (currentLanguage != 'en') {
             for (final msg in remote) {
               final orig = msg['originalText']!;
               if (_translationCache.containsKey(orig)) {
-                // Already translated — reuse cached result instantly
                 msg['text'] = _translationCache[orig]!;
               } else {
-                // New message — translate and cache it
                 try {
                   final res = await ApiService.translate(orig, currentLanguage);
                   final translated = res['translated'] ?? orig;
                   _translationCache[orig] = translated;
                   msg['text'] = translated;
                 } catch (_) {
-                  msg['text'] = orig; // fallback to original
+                  msg['text'] = orig;
                 }
               }
             }
@@ -225,13 +321,13 @@ class AppState extends ChangeNotifier {
           messages = remote;
           notifyListeners();
         }
-      } catch (_) {} // silently ignore poll failures
+      } catch (_) {}
     });
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // SESSION
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   Future<void> resetConversation() async {
     if (sessionId.isNotEmpty) {
@@ -249,14 +345,14 @@ class AppState extends ChangeNotifier {
   /// Device B calls this with Device A's session ID to sync messages.
   void joinSession(String remoteSessionId) {
     linkedSessionId = remoteSessionId.trim();
-    messages = [];          // clear local; polling will fill them in
+    messages = [];
     notifyListeners();
     print('[AppState] Joined session: $linkedSessionId');
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // MESSAGES
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   Future<void> addMessage(String sender, String text) async {
     final displayText = currentLanguage != 'en'
@@ -289,12 +385,12 @@ class AppState extends ChangeNotifier {
     return false;
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // SIGN HANDLING
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   Future<void> handleIncomingSign(String sign, String screen) async {
-    // ── Show instant fallback chips RIGHT NOW (no network wait) ──
+    // Show instant fallback chips RIGHT NOW (no network wait)
     final capitalized = sign[0].toUpperCase() + sign.substring(1).toLowerCase();
     currentSuggestions = [
       'I need $capitalized',
@@ -303,9 +399,9 @@ class AppState extends ChangeNotifier {
     ];
     loadingSuggestions = true;
     followupSuggestions = [];
-    notifyListeners(); // UI updates instantly
+    notifyListeners();
 
-    // ── Then enhance with backend paraphrase + template suggestions ──
+    // Then enhance with backend paraphrase + template suggestions
     final recentHistory = _getRecentHistory();
     try {
       final results = await Future.wait([
@@ -326,7 +422,6 @@ class AppState extends ChangeNotifier {
       // Keep the instant fallback chips already shown
     }
 
-    // ── If a non-English language is active, translate the suggestions ──
     if (currentLanguage != 'en') {
       currentSuggestions = await _translateList(currentSuggestions, currentLanguage);
     }
@@ -348,7 +443,6 @@ class AppState extends ChangeNotifier {
       );
       followupSuggestions = List<String>.from(followup['suggestions'] ?? []);
 
-      // Translate followup suggestions if needed
       if (currentLanguage != 'en' && followupSuggestions.isNotEmpty) {
         followupSuggestions = await _translateList(followupSuggestions, currentLanguage);
       }
@@ -356,25 +450,22 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // LANGUAGE
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   Future<void> switchLanguage(String langCode) async {
     if (langCode == currentLanguage) return;
     currentLanguage = langCode;
-    // Clear the cache — it was built for the previous language
     _translationCache.clear();
 
     if (langCode == 'en') {
-      // Restore originals on this device only
       for (var msg in messages) {
         msg['text'] = msg['originalText'] ?? msg['text']!;
       }
       currentSuggestions = List<String>.from(currentSuggestions);
       followupSuggestions = List<String>.from(followupSuggestions);
     } else {
-      // Translate messages and populate the cache
       for (var msg in messages) {
         final orig = msg['originalText'] ?? msg['text']!;
         final result = await ApiService.translate(orig, langCode);
@@ -382,11 +473,9 @@ class AppState extends ChangeNotifier {
         _translationCache[orig] = translated;
         msg['text'] = translated;
       }
-      // Translate current suggestions
       if (currentSuggestions.isNotEmpty) {
         currentSuggestions = await _translateList(currentSuggestions, langCode);
       }
-      // Translate followup suggestions
       if (followupSuggestions.isNotEmpty) {
         followupSuggestions = await _translateList(followupSuggestions, langCode);
       }
@@ -394,9 +483,9 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // ADMIN
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   Future<bool> adminLogin(String password) async {
     final result = await ApiService.adminLogin(password);
@@ -424,9 +513,9 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
   // HELPERS
-  // ─────────────────────────────────────────────────────────────
+  // -----------------------------------------------------------------------
 
   List<Map<String, String>> _getRecentHistory() {
     final recent = messages.length > 4
@@ -447,7 +536,6 @@ class AppState extends ChangeNotifier {
   Future<List<String>> _translateList(List<String> items, String langCode) async {
     final translated = <String>[];
     for (final item in items) {
-      // Use cache if available
       if (_translationCache.containsKey(item)) {
         translated.add(_translationCache[item]!);
         continue;
