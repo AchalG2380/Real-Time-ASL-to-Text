@@ -69,6 +69,14 @@ class AppState extends ChangeNotifier {
   int _wordPredictCooldown = 0;
   static const int _wordPredictCooldownFrames = 20;
 
+  // Guard: skip a new frame if the previous API call hasn't returned yet.
+  // Prevents piling up requests when Render latency > capture interval.
+  bool _frameInFlight = false;
+
+  // Per-letter consecutive count for web debouncing (letter -> count)
+  final Map<String, int> _webLetterCount = {};
+  static const int _webLetterMinCount = 2; // require 2 consecutive frames
+
   // DEBOUNCE FILTER
   String? _pendingSign;
   int _pendingCount = 0;
@@ -193,46 +201,61 @@ class AppState extends ChangeNotifier {
   // -----------------------------------------------------------------------
 
   /// Called by [CameraService] each time a new JPEG frame is ready.
-  /// 1. POSTs the frame to /predict/frame  ->  letter + keypoints
-  /// 2. Accumulates keypoints in a rolling buffer
-  /// 3. Every [_wordBufferSize] frames  ->  sends sequence to /predict/word
+  /// Guards against concurrent requests (Render latency can exceed 400ms capture interval).
   Future<void> _onWebFrame(Uint8List jpegBytes) async {
+    // Skip if the previous request hasn't returned yet (avoid queue build-up)
+    if (_frameInFlight) return;
+    _frameInFlight = true;
+
     try {
       final result   = await ApiService.predictFrame(jpegBytes);
       final detected = result['detected'] as bool? ?? false;
 
-      // Letter detection
       if (detected) {
         final letter     = result['letter']     as String? ?? '';
+        // Web JPEG pipeline has slightly lower confidence than native OpenCV;
+        // threshold lowered to 0.58 to compensate.
         final confidence = (result['confidence'] as num?)?.toDouble() ?? 0.0;
-        if (letter.isNotEmpty && confidence >= 0.72) {
-          _onSignReceived(letter, confidence, 'alphabet_model');
+
+        if (letter.isNotEmpty && confidence >= 0.58) {
+          // Require _webLetterMinCount consecutive frames of the same letter
+          _webLetterCount.updateAll((k, v) => k == letter ? v : 0);
+          final count = (_webLetterCount[letter] ?? 0) + 1;
+          _webLetterCount[letter] = count;
+
+          if (count >= _webLetterMinCount) {
+            _webLetterCount[letter] = 0; // reset after confirmation
+            _onSignReceived(letter, confidence, 'alphabet_model');
+          }
+        } else {
+          // Low confidence — decay all counts
+          _webLetterCount.updateAll((k, v) => (v - 1).clamp(0, 99));
         }
+      } else {
+        // No hand detected — reset counts
+        _webLetterCount.clear();
       }
 
-      // Word detection (sequence buffer)
+      // Word detection (sequence buffer) — only when extended endpoint is active
       final rawKp = result['keypoints'] as List? ?? [];
       if (rawKp.isNotEmpty) {
         final kp = rawKp.map((v) => (v as num).toDouble()).toList();
         _wordKpBuffer.add(kp);
-        if (_wordKpBuffer.length > _wordBufferSize) {
-          _wordKpBuffer.removeAt(0);
-        }
+        if (_wordKpBuffer.length > _wordBufferSize) _wordKpBuffer.removeAt(0);
 
         if (_wordPredictCooldown > 0) {
           _wordPredictCooldown--;
         } else if (_wordKpBuffer.length == _wordBufferSize) {
-          _predictWordSequence();  // fire-and-forget
+          _predictWordSequence();
           _wordPredictCooldown = _wordPredictCooldownFrames;
         }
-      } else {
-        // Hand not detected — clear stale frames
-        if (_wordKpBuffer.length > _wordBufferSize ~/ 2) {
-          _wordKpBuffer.clear();
-        }
+      } else if (detected == false) {
+        if (_wordKpBuffer.length > _wordBufferSize ~/ 2) _wordKpBuffer.clear();
       }
     } catch (_) {
-      // Silently ignore network errors
+      // Silently ignore individual frame errors
+    } finally {
+      _frameInFlight = false;
     }
   }
 

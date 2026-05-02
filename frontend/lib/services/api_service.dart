@@ -6,29 +6,48 @@ import '../core/constants.dart';
 class ApiService {
   static const String baseUrl = AppConstants.localApiBaseUrl;
 
-  // ── WEB CAMERA / PREDICTION ──────────────────────────────────
+  // ── WEB CAMERA / PREDICTION ──────────────────────────────────────────
+
+  // Auto-detected at runtime: true = /predict/frame works (new backend),
+  // false = fall back to /predict (old backend, letter-only, no keypoints).
+  static bool _useExtendedEndpoint = true;
 
   /// Send a single JPEG frame to the backend.
-  /// Returns letter prediction AND 84-feature keypoints for the word buffer.
+  /// Tries /predict/frame first (returns letter + keypoints for word detection).
+  /// Falls back permanently to /predict if the extended endpoint is unavailable.
   static Future<Map<String, dynamic>> predictFrame(Uint8List jpegBytes) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/predict/frame'),
-      );
-      request.files.add(
-        http.MultipartFile.fromBytes('file', jpegBytes, filename: 'frame.jpg'),
-      );
-      final streamed = await request.send().timeout(const Duration(seconds: 5));
-      final res = await http.Response.fromStream(streamed);
-      return jsonDecode(res.body) as Map<String, dynamic>;
-    } catch (e) {
-      return {'letter': '', 'confidence': 0.0, 'detected': false, 'keypoints': <double>[]};
-    }
+      if (_useExtendedEndpoint) {
+        // ── Try extended endpoint (/predict/frame) ────────────────────────
+        final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/predict/frame'));
+        req.files.add(http.MultipartFile.fromBytes('file', jpegBytes, filename: 'frame.jpg'));
+        final streamed = await req.send().timeout(const Duration(seconds: 6));
+        final res = await http.Response.fromStream(streamed);
+
+        if (res.statusCode == 200) {
+          return jsonDecode(res.body) as Map<String, dynamic>;
+        }
+        // Extended endpoint not available — downgrade permanently
+        _useExtendedEndpoint = false;
+      }
+
+      // ── Fallback: basic /predict (works on old deployed backend) ─────────
+      final req2 = http.MultipartRequest('POST', Uri.parse('$baseUrl/predict'));
+      req2.files.add(http.MultipartFile.fromBytes('file', jpegBytes, filename: 'frame.jpg'));
+      final streamed2 = await req2.send().timeout(const Duration(seconds: 6));
+      final res2 = await http.Response.fromStream(streamed2);
+
+      if (res2.statusCode == 200) {
+        final body = jsonDecode(res2.body) as Map<String, dynamic>;
+        // Normalise: add empty keypoints so callers don't need to branch
+        return {...body, 'keypoints': <double>[]};
+      }
+    } catch (_) {}
+    return {'letter': '', 'confidence': 0.0, 'detected': false, 'keypoints': <double>[]};
   }
 
   /// Send a 40-frame keypoint sequence for word detection.
-  /// [sequence] is a list of 40 lists, each containing 84 doubles.
+  /// Only called when /predict/frame is available (new backend).
   static Future<Map<String, dynamic>> predictWordSequence(
     List<List<double>> sequence,
   ) async {
@@ -300,6 +319,11 @@ class ApiService {
     String text,
     String targetLang,
   ) async {
+    if (text.trim().isEmpty || targetLang == 'en') {
+      return {'translated': text};
+    }
+
+    // 1. Try primary Render backend (/chat/translate via deep-translator)
     try {
       final res = await http
           .post(
@@ -307,13 +331,38 @@ class ApiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'text': text, 'target_language': targetLang}),
           )
-          .timeout(const Duration(seconds: 10));
-      return jsonDecode(res.body);
-    } catch (e) {
-      print('translate error: $e');
-      return {'translated': text};
-    }
+          .timeout(const Duration(seconds: 12));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final translated = (body['translated'] as String?) ?? '';
+        // Only use if it's actually different (backend sometimes echoes original)
+        if (translated.isNotEmpty && translated != text) {
+          return {'translated': translated};
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback: MyMemory free translation API — works directly from browser,
+    //    no API key, no rate-limit for short texts, good Hindi support.
+    try {
+      final encoded = Uri.encodeComponent(text);
+      final url =
+          'https://api.mymemory.translated.net/get?q=$encoded&langpair=en|$targetLang';
+      final res =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final translated =
+            (body['responseData']?['translatedText'] as String?) ?? '';
+        if (translated.isNotEmpty && translated != text) {
+          return {'translated': translated};
+        }
+      }
+    } catch (_) {}
+
+    return {'translated': text};
   }
+
 
   // ── SPEECH ────────────────────────────────────────────────────
 
